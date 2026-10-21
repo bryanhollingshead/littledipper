@@ -1,0 +1,15 @@
+{
+  "name": "little-dipper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Little Dipper: a self-hosted personal data store. Your data, not your definition.",
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "dev": "npm run dev -w server & npm run dev -w web",
+    "build": "npm run build -w web && npm run build -w server",
+    "start": "npm run start -w server",
+    "claim-link": "npm run cli -w server -- claim-link",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+  },
+  "engines": { "node": ">=20.0.0" }
+}

@@ -1,0 +1,117 @@
+# Little Dipper
+
+A self-hosted personal data store. Each person runs their own instance; the owner has full admin access, and everyone else sees only what the owner chooses. *Your data, not your definition.*
+
+This is the v1 implementation of the **Little Dipper** design (Claude Design project, `Little Dipper.dc.html`): claim, sign-in, the owner app, the public profile, and instance-to-instance connections.
+
+```
+server/   Node + TypeScript (Fastify) REST API, peer protocol, CLI
+web/      React (Vite) SPA; talks to nothing but the REST API
+```
+
+## Run it locally
+
+Node 20+ (Node 22 recommended).
+
+```sh
+npm install
+npm run dev            # API on :4000, web app on :5173 (proxied to the API)
+```
+
+The server prints a claim link on first boot:
+
+```
+[little-dipper] Claim this node: http://localhost:4000/claim?token=ct_…
+```
+
+Open it **on port 5173** in development (`http://localhost:5173/claim?token=…`). Passkeys need a real browser on `localhost` or https.
+
+With no `MONGODB_URI`, data goes to a local JSON file store in `./data` (fine for development and tiny installs). Set `MONGODB_URI` to use MongoDB.
+
+Lost the link, or it expired (1 hour)?
+
+```sh
+npm run claim-link               # prints a fresh link and invalidates earlier ones
+npm run cli -w server -- claim-link --qr
+```
+
+### Production build
+
+```sh
+npm run build && npm start       # serves the API and the built web app on :4000
+```
+
+### Tests
+
+```sh
+npm run smoke -w server
+```
+
+The smoke test starts two instances, claims both with a software passkey, then runs sign-in (passkey and recovery code), Secret field masking and reveal, the public profile, an invite-link connection, the basic profile and per-field grants (Secret grants need confirmation), token rotation, disconnect, API-key scopes, backup and export.
+
+## Configuration
+
+| Variable | Default | |
+|---|---|---|
+| `LD_PUBLIC_URL` | provider hostname, else `http://localhost:$PORT` | The host address. Configuration, never hard-coded. Detected automatically on Render, Railway and Fly. |
+| `PORT` | `4000` | |
+| `MONGODB_URI` / `MONGODB_DB` | unset / `little_dipper` | Unset means the local file store. |
+| `LD_DATA_DIR` | `./data` | Keystore (file mode), file store, encrypted backups. |
+| `LD_KEYSTORE_KEY` | unset | Set this on hosts with an ephemeral disk. The node identity is then stored in the database, encrypted with this key. |
+| `LD_CLAIM_TOKEN` | unset | Lets an installer pre-generate the first claim token and open `/claim?token=…` itself. |
+| `LD_DEPLOY_HOOK_URL` | unset | Enables **Update now** (e.g. a Render deploy hook). A backup is taken first. |
+| `LD_UPDATE_FEED_URL` | unset | JSON `{ version, notes }` for the latest release. |
+| `LD_ALLOW_HTTP_PEERS` | auto on localhost | Allow `http://` peers (development only). |
+
+## Deploy
+
+- **Render**: `render.yaml` (Docker runtime, MongoDB Atlas via `MONGODB_URI`, generated `LD_KEYSTORE_KEY`, 1 GB disk for backups). The claim link is in the service logs.
+- **Docker**: `docker compose up -d`, then `docker logs little-dipper | grep claim`. Expired? `docker exec little-dipper little-dipper claim-link`.
+- **VPS**: `npm run build`, run `node server/dist/server.js` under systemd, and use `little-dipper claim-link` (the `bin` in `server/package.json`) with the same environment.
+
+## Data model: domains
+
+Personal data is organised into **domains**, one per category. Each domain has its own endpoint (`/api/v1/{domain}`), its own grant in the contact admin and its own app-key scopes (`{domain}:read`, `{domain}:write`; `records:read`/`records:write` cover every domain).
+
+| Group | Domains |
+|---|---|
+| Identity | `names`, `ids` (government IDs), `citizenship`, `contact_methods` |
+| Life | `residences`, `relationships`, `pets`, `travel`, `life_events` |
+| Work | `employment`, `education`, `credentials`, `military` |
+| Health | `health`, `insurance` |
+| Money | `financial_accounts`, `income`, `tax_returns`, `legal` |
+| Things | `vehicles`, `property`, `memberships`, `online_accounts` |
+| Personal | `preferences` |
+
+- **Definitions** live in `server/src/domains/catalog.ts`: parts, types, sensitivity, whether records are dated and the display title. Owners can add their own categories (`POST /api/v1/catalog`, ids `x_…`).
+- **Records** are one JSON document each in the `records` collection, with `validFrom`/`validTo` partial dates (`2019`, `2019-06`, `2019-06-14`). "Current" means no end date.
+- **Secret parts** (ID numbers, pay, account details…) are encrypted one by one, masked in the API, and revealed only through a logged call.
+- **One source of truth**: the profile's Current address, Current city and Country of residence mirror the current residence; Email and Mobile phone mirror the primary contact methods.
+- **Sharing**: grant a contact a whole domain, either every record or current only. Secret parts are shared only with explicit confirmation. Peers read `GET /peer/v1/domains/{domain}`.
+- **Timeline**: `GET /api/v1/timeline` merges every dated record across domains.
+
+Card and bank numbers are stored as the last four digits only, and the model has no place for passwords.
+
+## How it works
+
+- **Claiming**: on first boot the node creates an ed25519 identity, `ldn_` + base32(sha256(publicKey)), and a one-time claim token. Only the token's sha256 is stored. Setup has four steps: Verify link → You → Sign-in → Done. Claiming deletes the token, and the setup routes stop answering.
+- **Sign-in**: passkeys (WebAuthn). Fallback is a password (argon2id) plus an authenticator code (TOTP), set up in Settings → Security. There are 8 single-use recovery codes, stored hashed.
+- **Sessions and keys**: browser sessions, app keys and peer tokens share one `apiKeys` shape. Only a hash and a display prefix are stored. The browser session holds `admin:*`; app keys carry scopes (`owner:read`, `contacts:write`, …).
+- **Fields**: each field is Standard, Sensitive or Secret. Secret values are AES-256-GCM encrypted at rest, masked in the API, never public, and every reveal is audited.
+- **Connections**: every peer→peer write is a signed envelope (ed25519 over canonical JSON, with a timestamp and a nonce for replay protection). Request → accept exchanges scoped bearer tokens both ways. Peers read `GET /peer/v1/profile` (the basic profile) and `GET /peer/v1/fields` (per-field extras). Rotate, disconnect and address-change are signed messages too. Requests are allowed by `connectRequests` (`off` / `fof` / `anyone`) or by a single-use invite link.
+- **Addresses**: the canonical address is a verified custom domain, otherwise the host address. Changing it sends `/peer/v1/address-change` to every connection. Retired domains redirect for 90 days.
+- **Backups**: nightly at 03:00, encrypted with the node's master key, kept 30 days. A recovery kit (passphrase-encrypted signing key + master key) restores the same identity on new hardware: `little-dipper restore-kit <file>`.
+
+**Settings → Show technical details** turns on the Build reference pages (Data model, Endpoints) and the API Explorer.
+
+## Not built yet / known gaps
+
+- Big Dipper, ID verification and the API docs site are out of scope. **API docs** is a stub.
+- The "people my contacts know" (`fof`) check uses hashed mutual-contact hints supplied by the requester. These are not yet cryptographically verified.
+- The recovery kit holds the signing and backup keys, but not recovery codes, which are only ever stored hashed.
+- Backups go to the data directory only. S3-compatible destinations are not implemented.
+- The portrait is still a placeholder (no avatar upload).
+- Requests can't ask for specific fields from the UI yet. The protocol supports `requestedFields`.
+- Domains have a full API but no admin screens yet, apart from the reference pages and shared-data display. Contact sharing per domain is API-only so far.
+- File attachments (passport scans etc.) aren't implemented yet. Records have no `attachments` part yet.
+- Domains can't be shown on the public profile yet, though the catalog marks which ones may be (`publicable`).

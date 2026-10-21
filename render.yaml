@@ -1,0 +1,18 @@
+# One-click deploy to Render. The claim link prints to the service logs on first boot.
+services:
+  - type: web
+    name: little-dipper
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/v1/node/status
+    envVars:
+      - key: MONGODB_URI
+        sync: false # paste a MongoDB Atlas connection string
+      - key: LD_KEYSTORE_KEY
+        generateValue: true # keeps the node identity in the database, encrypted with this
+      - key: LD_DATA_DIR
+        value: /data
+    disk:
+      name: little-dipper-data
+      mountPath: /data
+      sizeGB: 1
