@@ -12,6 +12,7 @@ import {
 import { getDomain } from '../domains/records.js';
 import { sharedDomainOut } from '../domains/sharing.js';
 import { endLink, existingForNode, firstName, issuePeerToken, newNodeContact, pushTimeline, sharedOut, syncContact, touch } from '../contacts.js';
+import { receiveMessage, type WireMessage } from '../messages.js';
 
 type Intro = { nodeId: string; address: string; signingKey: string; displayName: string; version?: string };
 
@@ -185,6 +186,15 @@ export default async function peerRoutes(app: FastifyInstance) {
     await audit({ actor: { type: 'peer', id: link.peerNodeId }, action: 'link.address', resource: `nodeLinks/${link._id}`, text: `${c?.displayName || 'A contact'} moved to ${displayAddr(origin)}`, tone: 'peer' });
     reply.code(202);
     return { updated: true };
+  });
+
+  /** A message from a connected contact. The sender picks the id, so a retried delivery returns 200 without storing twice. */
+  app.post('/peer/v1/messages', async (req, reply) => {
+    rateLimit(req, 'peer-message', 600, 60 * 60_000);
+    const { link, payload } = await verifiedLink<WireMessage>(req.body, ['active']);
+    const r = await receiveMessage(link, payload as WireMessage);
+    reply.code(r.duplicate ? 200 : 201);
+    return { received: true, id: payload.id, duplicate: r.duplicate };
   });
 
   /** Basic profile: every Standard field. Granted by default on connect (scope peer:profile). */

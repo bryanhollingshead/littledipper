@@ -183,7 +183,7 @@ async function peerFetch(url: string, init: RequestInit & { json?: unknown } = {
   }
 }
 
-export type Descriptor = { nodeId: string; version: string; signingKey: string; displayName: string | null; address: string; connectRequests: string; claimed: boolean };
+export type Descriptor = { nodeId: string; version: string; signingKey: string; displayName: string | null; address: string; connectRequests: string; claimed: boolean; kind?: string; capabilities?: string[] };
 
 /** Fetch and verify another node's descriptor. */
 export async function lookupDescriptor(origin: string): Promise<Descriptor> {

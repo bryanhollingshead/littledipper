@@ -13,6 +13,7 @@ import Category from './pages/admin/Category';
 import Timeline from './pages/admin/Timeline';
 import Contacts from './pages/admin/Contacts';
 import ContactDetail from './pages/admin/ContactDetail';
+import Messages from './pages/admin/Messages';
 import PublicEditor from './pages/admin/PublicEditor';
 import Apps from './pages/admin/Apps';
 import Settings from './pages/admin/Settings';
@@ -43,6 +44,8 @@ export default function App() {
             <Route path="life/:domain" element={<Category />} />
             <Route path="contacts" element={<Contacts />} />
             <Route path="contacts/:id" element={<ContactDetail />} />
+            <Route path="messages" element={<Messages />} />
+            <Route path="messages/:contactId" element={<Messages />} />
             <Route path="public" element={<PublicEditor />} />
             <Route path="apps" element={<Apps />} />
             <Route path="settings" element={<Settings />} />

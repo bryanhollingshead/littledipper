@@ -1,6 +1,6 @@
 # Messaging and Email
 
-> **Status: direction agreed, not built.** Recorded 2026-10-21.
+> **Status: first version built** on branch `messaging` (2026-10-21): text between connected Little Dippers, inbox, outbox with retries, encrypted at rest, `messages` capability. Organization services and email are not built.
 
 ## Decided
 

@@ -78,7 +78,14 @@ export const ENDPOINTS: Endpoint[] = ([
   ['Peer', 'GET', '/peer/v1/fields', 'peer', 'Extra fields granted one by one (Sensitive or Secret). Returns only those.'],
   ['Peer', 'GET', '/peer/v1/domains', 'peer', 'Domains granted to this peer.'],
   ['Peer', 'GET', '/peer/v1/domains/{domain}', 'peer', 'Records of a granted domain: display fields plus raw data (no secret parts unless granted).'],
+  ['Peer', 'POST', '/peer/v1/messages', 'peer', 'Signed message from a connected node. The sender picks the id, so a retried delivery is answered 200 without storing twice.'],
   ['Peer', 'POST', '/peer/v1/address-change', 'peer', 'Signed notice that a peer moved. Verified against the stored key, then peerUrl is updated.'],
+  ['Messages', 'GET', '/api/v1/messages/unread', 'owner', 'Number of unread incoming messages.', 'messages:read'],
+  ['Messages', 'GET', '/api/v1/messages/conversations', 'owner', 'One row per contact you have messaged: last message, unread count, whether you can still message them.', 'messages:read'],
+  ['Messages', 'GET', '/api/v1/messages/conversations/{contactId}', 'owner', 'Messages with one contact, oldest first. ?before=&limit=', 'messages:read'],
+  ['Messages', 'POST', '/api/v1/messages/conversations/{contactId}', 'owner', 'Send { body, kind?: "text", inReplyTo? }. Delivered at once when their node answers; otherwise queued and retried for 3 days.', 'messages:write'],
+  ['Messages', 'POST', '/api/v1/messages/conversations/{contactId}/read', 'owner', 'Mark that conversation read.', 'messages:write'],
+  ['Messages', 'POST', '/api/v1/messages/{id}/retry', 'owner', 'Try a failed message again.', 'messages:write'],
   ['Public', 'GET', '/public/v1/profile', 'public', 'Public profile: header and visible fields only.'],
   ['Public', 'GET', '/public/v1/invites/{token}', 'public', 'Whether an invite link is still valid (for the /connect page).'],
   ['Public', 'GET', '/api/v1/public-profile', 'owner', 'Visibility config.', 'owner:read'],
@@ -103,10 +110,11 @@ export const SCHEMAS: { name: string; coll: string; desc: string; json: string }
   ['Record', 'records', 'One document per entry in a domain (a job, a residence, a passport…). Domain schemas: see Domains below.', { _id: 'rec_…', domain: 'employment', data: { employer: 'Alder Studio', title: 'Product designer', currentPay: 'enc:v1:…  (secret parts AES-256-GCM encrypted)' }, validFrom: '2021-03  (partial ISO date)', validTo: 'null = current', notes: 'string', source: { type: 'owner | app | import | system', id: 'string' }, schemaVersion: 'number', createdAt: 'date', updatedAt: 'date' }],
   ['DomainDef', 'domainDefs', 'Owner-defined domains. Built-in domains live in code (server/src/domains/catalog.ts).', { _id: 'x_wine_cellar', id: 'x_wine_cellar', label: 'Wine cellar', sensitivity: 'standard | sensitive | secret', dated: 'boolean', parts: [{ key: 'Wine', label: 'Wine', type: 'text | longtext | date | email | phone | url | country | currency | money | number | boolean | enum | last4 | contact', required: 'boolean', sensitivity: 'optional override' }], title: '{Wine}' }],
   ['AuditEvent', 'audit', 'Append-only. Every read by a peer and every change by the owner.', { _id: 'evt_…', at: 'date', actor: { type: 'owner | peer | public | system', id: 'string' }, action: 'field.read | field.reveal | grant.update | link.accept | …', resource: 'fields/email', text: 'plain-language line for the activity feed', ip: 'string' }],
+  ['Message', 'messages', 'One per message, in or out. Same _id on both nodes (chosen by the sender). Body encrypted at rest.', { _id: 'msg_…', contactId: 'ref contacts', conversationId: 'contact id (one conversation per contact for now)', direction: 'in | out', kind: 'text | … (open set)', body: 'enc:v1:… (JSON, AES-256-GCM)', inReplyTo: 'msg_… | null', attachments: [], transport: 'peer | email | service', status: 'queued | sent | delivered | failed | received | read', attempts: 'number', nextAttemptAt: 'date | null', lastError: 'code | null', queuedAt: 'date | null', createdAt: 'date', sentAt: 'date | null', deliveredAt: 'date | null', readAt: 'date | null' }],
   ['Backup', 'backups', 'Metadata for encrypted backup files on disk (nightly 03:00, kept 30 days).', { _id: 'bak_…', at: 'date', size: 'bytes', documents: 'number', file: 'bak_….ldbak', reason: 'scheduled | manual | pre-update | pre-restore' }],
 ] as [string, string, string, object][]).map(([name, coll, desc, obj]) => ({ name, coll, desc, json: JSON.stringify(obj, null, 2) }));
 
-export const SCOPES = ['owner:read', 'owner:write', 'records:read', 'records:write', 'contacts:read', 'contacts:write', 'public:write', 'keys:manage', 'audit:read', 'export'];
+export const SCOPES = ['owner:read', 'owner:write', 'records:read', 'records:write', 'contacts:read', 'contacts:write', 'public:write', 'keys:manage', 'audit:read', 'export', 'messages:read', 'messages:write'];
 
 export const MDARK: Record<string, string> = { GET: 'var(--color-accent-2-700)', POST: 'var(--color-accent-700)', PUT: 'var(--color-accent-800)', PATCH: 'var(--color-accent-800)', DELETE: 'var(--color-accent-900)' };
 export const AUTHC: Record<string, string> = { owner: 'tag-neutral', session: 'tag-neutral', peer: 'tag-accent-2', public: 'tag-outline', claim: 'tag-accent' };

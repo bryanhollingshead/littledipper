@@ -50,6 +50,16 @@ export type NodeInfo = {
   hosting: { provider: string; label: string; region: string; store: string; documents: number };
   lastBackupAt: string | null; publicViewsToday: number; claimedAt: string | null;
 };
+export type MessageStatus = 'queued' | 'sent' | 'delivered' | 'failed' | 'received' | 'read';
+export type Message = {
+  id: string; contactId: string; conversationId: string; direction: 'in' | 'out'; kind: string; body: unknown; inReplyTo: string | null;
+  transport: 'peer' | 'email' | 'service'; status: MessageStatus; lastError: string | null; createdAt: string; sentAt: string | null; deliveredAt: string | null; readAt: string | null;
+};
+export type Conversation = {
+  contact: Pick<Contact, 'id' | 'displayName' | 'kind' | 'status' | 'node'>;
+  last: { id: string; direction: 'in' | 'out'; kind: string; preview: string; status: MessageStatus; at: string };
+  unread: number; canMessage: boolean;
+};
 export type Owner = { id: string; displayName: string; email: string; prefs: { showTechnical: boolean }; role: string };
 export type AuditEvent = { _id: string; at: string; action: string; text: string; tone: 'peer' | 'request' | 'owner' | 'system' };
 

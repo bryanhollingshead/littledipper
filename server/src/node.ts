@@ -44,9 +44,13 @@ export function canonicalUrl(n: NodeDoc): string {
 /** Display form without scheme: "maya-ld.onrender.com". */
 export const displayAddr = (url: string) => url.replace(/^https?:\/\//, '');
 
+/** What this node can do, advertised in its descriptor. Additive only: a capability is never withdrawn (docs/COMPATIBILITY.md VII). */
+export const CAPABILITIES = ['messages'] as const;
+
 export function descriptor(n: NodeDoc, displayName: string | null, connectRequests: string) {
   const base = canonicalUrl(n);
   return {
+    kind: 'node' as const,
     nodeId: n._id,
     version: n.version,
     signingKey: n.signingKey.publicKey,
@@ -58,6 +62,7 @@ export function descriptor(n: NodeDoc, displayName: string | null, connectReques
     federation: `${base}/peer/v1`,
     connectRequests,
     claimed: n.claimed,
+    capabilities: [...CAPABILITIES],
   };
 }
 

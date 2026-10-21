@@ -27,7 +27,7 @@ export type ApiKeyDoc = Doc & {
 };
 
 /** Fixed scopes. Each domain also has its own: {domain}:read and {domain}:write. records:* covers every domain. */
-export const SCOPES = ['owner:read', 'owner:write', 'records:read', 'records:write', 'contacts:read', 'contacts:write', 'public:write', 'keys:manage', 'audit:read', 'export'] as const;
+export const SCOPES = ['owner:read', 'owner:write', 'records:read', 'records:write', 'contacts:read', 'contacts:write', 'public:write', 'keys:manage', 'audit:read', 'export', 'messages:read', 'messages:write'] as const;
 
 export const COOKIE = { session: 'ld_session', setup: 'ld_setup', mfa: 'ld_mfa' } as const;
 

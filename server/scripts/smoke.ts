@@ -73,7 +73,7 @@ class Client {
 
 function startNode(port: number, dir: string): Promise<{ proc: ChildProcess; claimUrl: string }> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('npx', ['tsx', 'src/server.ts'], { cwd: path.resolve(import.meta.dirname, '..'), env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: `http://localhost:${port}` } });
+    const proc = spawn('npx', ['tsx', 'src/server.ts'], { cwd: path.resolve(import.meta.dirname, '..'), env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: `http://localhost:${port}`, LD_RETRY_BASE_MS: '300' } });
     let claimUrl = '';
     proc.stdout!.on('data', (d: Buffer) => {
       const s = d.toString();
@@ -101,7 +101,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'ld-smoke-'));
-  const [A, B] = await Promise.all([startNode(4201, path.join(tmp, 'a')), startNode(4202, path.join(tmp, 'b'))]);
+  const [A, firstB] = await Promise.all([startNode(4201, path.join(tmp, 'a')), startNode(4202, path.join(tmp, 'b'))]);
+  let B = firstB; // restarted mid-test to check offline delivery
   const a = new Client('http://localhost:4201'), b = new Client('http://localhost:4202');
   const ka = new SoftKey(), kb = new SoftKey();
   try {
@@ -237,6 +238,39 @@ async function main() {
     detB = await b.call('GET', `/api/v1/contacts/${cB.id}`);
     ok(detB.sharedDomains.some((d: any) => d.domain === 'education' && d.records.length === 1), 'grant + edit nudge B to sync without asking');
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { education: false } });
+    console.log('messaging');
+    const wk = await (await fetch(a.base + '/.well-known/little-dipper')).json();
+    ok(wk.kind === 'node' && wk.capabilities?.includes('messages'), 'descriptor advertises the messages capability');
+    const msg1 = await a.call('POST', `/api/v1/messages/conversations/${cA.id}`, { body: 'Hi Theo, testing messages' });
+    ok(msg1.status === 'delivered' && msg1.direction === 'out', 'A messages B and it is delivered');
+    ok((await b.call('GET', '/api/v1/messages/unread')).count === 1, 'B has one unread message');
+    const convB = await b.call('GET', `/api/v1/messages/conversations/${cB.id}`);
+    ok(convB.items.length === 1 && convB.items[0].id === msg1.id && convB.items[0].body === 'Hi Theo, testing messages', 'B stores it under the id A chose');
+    await b.call('POST', `/api/v1/messages/conversations/${cB.id}/read`, {});
+    ok((await b.call('GET', '/api/v1/messages/unread')).count === 0, 'reading the conversation clears unread');
+    const answer = await b.call('POST', `/api/v1/messages/conversations/${cB.id}`, { body: 'Got it', inReplyTo: msg1.id });
+    const convA = await a.call('GET', `/api/v1/messages/conversations/${cA.id}`);
+    ok(convA.items.length === 2 && convA.items[1].id === answer.id && convA.items[1].inReplyTo === msg1.id, 'B replies and A sees the thread in order');
+    // Offline recipient: queued now, delivered by the outbox once B is back.
+    B.proc.kill();
+    await sleep(300);
+    const late = await a.call('POST', `/api/v1/messages/conversations/${cA.id}`, { body: 'Are you there?' });
+    ok(late.status === 'queued', 'a message to an offline node is queued');
+    B = await startNode(4202, path.join(tmp, 'b'));
+    let arrived = false;
+    for (let i = 0; i < 40 && !arrived; i++) {
+      await sleep(250);
+      arrived = (await a.call('GET', `/api/v1/messages/conversations/${cA.id}`)).items.some((m: any) => m.id === late.id && m.status === 'delivered');
+    }
+    ok(arrived, 'the outbox delivers it once the node is back');
+    const inboxA = await a.call('GET', '/api/v1/messages/conversations');
+    ok(inboxA.items[0].contact.id === cA.id && inboxA.items[0].unread === 1, "A's inbox lists the conversation with one unread");
+    await a.call('POST', `/api/v1/messages/conversations/${cA.id}`, { body: '   ' }, [400]);
+    ok(true, 'empty messages are refused');
+    const msgKey = await a.call('POST', '/api/v1/keys', { name: 'Reader', scopes: ['owner:read'] });
+    const noMsg = await fetch(a.base + '/api/v1/messages/conversations', { headers: { authorization: `Bearer ${msgKey.secret}` } });
+    ok(noMsg.status === 403, 'app key without messages:read is refused');
+
     const keys = (await a.call('GET', '/api/v1/keys')).items;
     ok(keys.some((k: any) => k.kind === 'peer') && keys.some((k: any) => k.current), 'keys list shows session and peer token');
     const app = await a.call('POST', '/api/v1/keys', { name: 'Home Assistant', scopes: ['owner:read'] });
@@ -248,6 +282,8 @@ async function main() {
     await a.call('DELETE', `/api/v1/federation/links/${detA.node.linkId}`);
     const afterB = (await b.call('GET', '/api/v1/contacts')).items[0];
     ok(afterB.status === 'plain' && afterB.kind === 'person', 'disconnect leaves B with a plain contact');
+    await a.call('POST', `/api/v1/messages/conversations/${cA.id}`, { body: 'Still there?' }, [409]);
+    ok((await a.call('GET', `/api/v1/messages/conversations/${cA.id}`)).items.length === 3, 'after disconnect: sending is refused, history is kept');
 
     console.log('backups & export');
     const bk = await a.call('POST', '/api/v1/node/backups', {});

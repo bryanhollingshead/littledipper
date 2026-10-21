@@ -115,6 +115,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     if (link) { await revokeIssuedToken(link); await ctx.store.remove('nodeLinks', link._id); }
     await ctx.store.removeMany('grants', { contactId: c._id });
     await ctx.store.removeMany('connectionRequests', { contactId: c._id });
+    await ctx.store.removeMany('messages', { contactId: c._id });
     await ctx.store.remove('contacts', c._id);
     await audit({ actor: ownerActor(p.key._id), action: 'contact.delete', resource: `contacts/${c._id}`, text: `You deleted ${c.displayName}`, tone: 'owner' });
     return { deleted: true };

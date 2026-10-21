@@ -82,6 +82,7 @@ export default function ContactDetail() {
           </div>
         </div>
         {!isNode && <button className="btn btn-secondary" onClick={invite}>Invite to Little Dipper</button>}
+        {isNode && s === 'active' && <Link className="btn btn-primary" to={`/admin/messages/${c.id}`}>Message</Link>}
       </div>
 
       {s === 'pending_in' && (

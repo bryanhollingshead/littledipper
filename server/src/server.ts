@@ -6,6 +6,7 @@ import { runMigrations } from './migrate.js';
 import { buildApp } from './app.js';
 import { scheduleBackups } from './backups.js';
 import { announceAddress } from './routes/node.js';
+import { startOutbox } from './messages.js';
 
 async function main() {
   ctx.store = await openStore(config);
@@ -18,6 +19,7 @@ async function main() {
   await app.listen({ port: config.port, host: config.host });
   say(`Answering at ${config.hostUrl}`);
   scheduleBackups(say);
+  startOutbox();
 
   if (moved) {
     // The host address changed between boots: tell every connection.

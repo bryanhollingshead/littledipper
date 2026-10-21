@@ -260,6 +260,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
         if (coll === 'fields' && isEncrypted(out.value)) out.value = decrypt(ctx.keys.masterKey, out.value);
         if (coll === 'owners') { delete out.passwordHash; delete out.totp; delete out.recoveryCodeHashes; }
         if (coll === 'nodeLinks') delete out.tokenFromPeerEnc;
+        if (coll === 'messages' && isEncrypted(out.body)) out.body = JSON.parse(decrypt(ctx.keys.masterKey, out.body));
         lines.push(JSON.stringify({ collection: coll, ...out }));
       }
     }

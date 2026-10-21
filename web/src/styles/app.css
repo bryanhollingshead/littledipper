@@ -37,6 +37,15 @@ a:hover { color: var(--color-accent-800); }
   .main { overflow: visible; }
 }
 
+/* Messages: list beside thread; on phones one at a time */
+.inbox { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; gap: 22px; align-items: start; }
+.inbox .inbox-back { display: none; }
+@media (max-width: 760px) {
+  .inbox { grid-template-columns: 1fr; }
+  .inbox[data-open='1'] .inbox-list, .inbox[data-open='0'] .inbox-thread { display: none; }
+  .inbox .inbox-back { display: inline-flex; }
+}
+
 /* Clickable rows */
 .row-btn { cursor: pointer; }
 .spin { animation: ldpulse 1.2s infinite; }
