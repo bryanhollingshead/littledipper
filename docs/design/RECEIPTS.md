@@ -9,7 +9,7 @@
   - `list`: rows of sub-parts. Receipts use it for line items (item, quantity, price, product code). Up to 200 rows; blank rows are dropped.
   - `files`: attached photos or PDFs, stored as `[{ id, name, type, size }]`.
 - **Files** (`/api/v1/files`): upload the raw bytes first, then put the id in a record. JPEG, PNG, WebP, GIF, HEIC and PDF, up to 10 MB, and the contents must match the declared type. Files are encrypted with the master key and kept apart from documents (`data/blobs/`, or a Mongo `blobs` collection). A file belongs to one domain, whose scopes guard it, and to one record. Removing it from the record, or deleting the record, deletes it. Uploads never saved on a record are removed after 24 hours. Contacts a receipt is shared with get the details and line items, but not the files (yet).
-- **Return-by and warranty-until** are `remind` dates: they appear on Home and in My life's "Coming up", then drop off two weeks after they pass.
+- **Return-by and warranty-until** are `remind` dates: they appear on Home and in My data's "Coming up", then drop off two weeks after they pass.
 - **Receipts page** (`/admin/receipts`, in the sidebar): upload or drag and drop several at once (each becomes a receipt; one opens straight in the editor), a "needs details" list, filters by year, search, spending by year and by category (totals kept per currency), and a CSV download for an accountant. Large photos are shrunk to 2000px in the browser before upload.
 - **Ready for assistants:** an app key with `receipts:read` and `receipts:write` can upload a photo, create the receipt and fill in the details, with `capturedVia: "assistant"`. How AIs are invited is still question 7.
 
