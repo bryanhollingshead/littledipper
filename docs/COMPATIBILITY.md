@@ -102,6 +102,15 @@ These rules only work if CI enforces them:
 
 Big Dipper's opt-in verification will check nodes against the same spec. The rules contributors follow and the rules nodes are verified against are therefore one standard.
 
+## XI. The API is the only front door.
+
+People will build their own skins: other UX kits and apps that replace or sit beside the bundled admin. So the bundled web app gets **no private channel**:
+- **Everything it does, it does through the documented API.** No server-rendered pages, no internal-only endpoints, no reading the store directly.
+- **Logic a skin would need lives on the server.** Validation, privacy rules (what may be public or shared), derived values and anything security-relevant are enforced by the API, never only in the UI. The UI may add convenience (shrinking photos, totals on screen), but a skin that skips it must still get correct, safe results.
+- **Words and choices come from the API where they're data:** category labels, parts, enum options, document kinds, section titles. A skin shouldn't have to copy lists out of our UI code.
+- **Public URLs the server hands out are a contract.** Share links (`/s/{token}`), invite links (`/connect?invite=`) and claim links (`/claim`) are routes any skin served by the node must answer.
+- **Test it like a skin would:** the smoke test drives only the HTTP API.
+
 ---
 
 ## Gaps today
@@ -114,6 +123,10 @@ The current code doesn't meet these rules yet in a few places:
 - [ ] Unknown request fields: current behavior is unverified.
 - [ ] No breaking-change check, contract tests, cross-release peer test or upgrade test in CI.
 - [ ] No release has been tagged as the compatibility baseline.
+- [ ] Skins on another origin can't sign in: there's no CORS and no way for a skin to ask the owner for access (question 14).
+- [ ] 28 routes accept only the owner's browser session (security settings, share links, accepting suggestions…), so a skin with an app key can't offer them.
+- [ ] Some data lists still live in the bundled UI (public-profile section titles, category blurbs) instead of the API.
+- [ ] The endpoint reference is hand-written in the web app (`web/src/reference.ts`) instead of served from the OpenAPI spec.
 
 ## Open questions
 
