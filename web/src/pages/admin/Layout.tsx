@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { addr, ApiError, copy, get, initials, patch, post, type NodeInfo, type Owner } from '../../api';
 import { Loading, useToast } from '../../ui';
+import { Icon, type IconName } from '../../icons';
 
 type Admin = {
   owner: Owner;
@@ -16,12 +17,20 @@ type Admin = {
 const AdminCtx = createContext<Admin>(null as never);
 export const useAdmin = () => useContext(AdminCtx);
 
-const NAV: [string, string][] = [['/admin', 'Home'], ['/admin/life', 'My data'], ['/admin/documents', 'Documents'], ['/admin/lifestream', 'Lifestream'], ['/admin/receipts', 'Receipts'], ['/admin/contacts', 'Contacts'], ['/admin/messages', 'Messages'], ['/admin/public', 'Public profile'], ['/admin/apps', 'Apps and access'], ['/admin/settings', 'Settings']];
-const DOCS: [string, string][] = [['/admin/reference/model', 'Data model'], ['/admin/reference/endpoints', 'Endpoints']];
+const NAV: [string, string, IconName][] = [
+  ['/admin', 'Home', 'home'], ['/admin/life', 'My data', 'data'], ['/admin/documents', 'Documents', 'documents'], ['/admin/lifestream', 'Lifestream', 'lifestream'],
+  ['/admin/receipts', 'Receipts', 'receipts'], ['/admin/contacts', 'Contacts', 'contacts'], ['/admin/messages', 'Messages', 'messages'],
+  ['/admin/public', 'Public profile', 'profile'], ['/admin/apps', 'Apps and access', 'apps'], ['/admin/settings', 'Settings', 'settings'],
+];
+const DOCS: [string, string, IconName][] = [['/admin/reference/model', 'Data model', 'model'], ['/admin/reference/endpoints', 'Endpoints', 'endpoints']];
 
-const Badge = ({ n }: { n: number }) => (
-  <span style={{ minWidth: 20, height: 20, borderRadius: 999, background: 'var(--color-accent)', color: 'var(--color-bg)', fontSize: 11, display: 'grid', placeItems: 'center', padding: '0 6px' }}>{n}</span>
-);
+const Badge = ({ n }: { n: number }) => <span className="nav-badge">{n}</span>;
+
+/** Whether the sidebar is folded to icons: a per-device convenience, so browser storage. */
+const RAIL_KEY = 'ld.sidebar.rail';
+function readRail() {
+  try { return localStorage.getItem(RAIL_KEY) === '1'; } catch { return false; }
+}
 
 export default function AdminLayout() {
   const nav = useNavigate();
@@ -34,6 +43,11 @@ export default function AdminLayout() {
   const [inboxDocs, setInboxDocs] = useState(0);
   const [authError, setAuthError] = useState(false);
   const [n, setN] = useState(0);
+  const [rail, setRail] = useState(readRail);
+  const toggleRail = () => setRail((v) => {
+    try { localStorage.setItem(RAIL_KEY, v ? '0' : '1'); } catch { /* fine: just not remembered */ }
+    return !v;
+  });
 
   const load = useCallback(async () => {
     try {
@@ -69,33 +83,47 @@ export default function AdminLayout() {
   return (
     <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, refresh: () => setN((x) => x + 1) }}>
       <div className="shell">
-        <aside className="sidebar" aria-label="Main">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 10px 4px', flex: 'none' }}>
-            <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--color-accent)', color: 'var(--color-bg)', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, flex: 'none' }}>{initials(owner.displayName)}</span>
-            <span style={{ fontFamily: 'var(--font-heading)', fontSize: 18, lineHeight: 1.15 }}>{owner.displayName}</span>
+        <aside className="sidebar" aria-label="Main" data-rail={rail ? '1' : '0'}>
+          <div className="side-head">
+            <span className="side-avatar" title={rail ? owner.displayName : undefined}>{initials(owner.displayName)}</span>
+            <span className="side-name">{owner.displayName}</span>
+            <button type="button" className="bare side-toggle" onClick={toggleRail} aria-expanded={!rail} aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title={rail ? 'Expand sidebar' : 'Collapse sidebar'}>
+              <Icon name="panel" size={18} />
+            </button>
           </div>
           <div className="text-muted mono brand-addr" style={{ padding: '2px 10px 0 50px', fontSize: 11, overflowWrap: 'anywhere' }}>{addr(node.address)}</div>
-          <div className="text-muted mono brand-addr" style={{ padding: '2px 10px 18px 50px' }}>
+          <div className="text-muted mono brand-addr" style={{ padding: '2px 10px 14px 50px' }}>
             <button type="button" title={`${node.id} · click to copy`} onClick={async () => toast((await copy(node.id)) ? 'Node ID copied' : node.id)}
               style={{ all: 'unset', cursor: 'pointer', fontSize: 11, opacity: 0.75 }}>{node.id.slice(0, 8)}…{node.id.slice(-4)}</button>
           </div>
-          {NAV.map(([to, label]) => (
-            <NavLink key={to} to={to} end={to === '/admin'} className="nav-pill" aria-current={isOn(to) ? 'page' : undefined}>
-              {label}
-              {to === '/admin/contacts' && pendingIn > 0 && <Badge n={pendingIn} />}
-              {to === '/admin/messages' && unreadMessages > 0 && <Badge n={unreadMessages} />}
-              {to === '/admin/documents' && inboxDocs > 0 && <Badge n={inboxDocs} />}
-            </NavLink>
-          ))}
+          {NAV.map(([to, label, icon]) => {
+            const count = to === '/admin/contacts' ? pendingIn : to === '/admin/messages' ? unreadMessages : to === '/admin/documents' ? inboxDocs : 0;
+            return (
+              <NavLink key={to} to={to} end={to === '/admin'} className="nav-pill" aria-current={isOn(to) ? 'page' : undefined}
+                title={rail ? (count ? `${label} (${count})` : label) : undefined} aria-label={rail ? (count ? `${label} (${count})` : label) : undefined}>
+                <Icon name={icon} className="nav-ico" />
+                <span className="nav-label">{label}</span>
+                {count > 0 && <Badge n={count} />}
+              </NavLink>
+            );
+          })}
           {tech && (
             <>
               <div className="text-muted side-label" style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', padding: '18px 14px 4px' }}>Build reference</div>
-              {DOCS.map(([to, label]) => <NavLink key={to} to={to} className="nav-pill" aria-current={isOn(to) ? 'page' : undefined}>{label}</NavLink>)}
+              {rail && <div className="side-rule" aria-hidden />}
+              {DOCS.map(([to, label, icon]) => (
+                <NavLink key={to} to={to} className="nav-pill" aria-current={isOn(to) ? 'page' : undefined} title={rail ? label : undefined} aria-label={rail ? label : undefined}>
+                  <Icon name={icon} className="nav-ico" />
+                  <span className="nav-label">{label}</span>
+                </NavLink>
+              ))}
             </>
           )}
-          <div className="side-foot" style={{ marginTop: 'auto', padding: '16px 10px 0', display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
-            <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>Signed in</div><div className="text-muted" style={{ fontSize: 11 }}>{tech ? `Owner · ${owner.role}` : 'Owner'}</div></div>
-            <button className="btn btn-ghost" onClick={signOut} style={{ fontSize: 12 }}>Sign out</button>
+          <div className="side-foot">
+            <div className="side-who"><div style={{ fontSize: 13, fontWeight: 600 }}>Signed in</div><div className="text-muted" style={{ fontSize: 11 }}>{tech ? `Owner · ${owner.role}` : 'Owner'}</div></div>
+            <button className="btn btn-ghost side-signout" onClick={signOut} title={rail ? 'Sign out' : undefined} aria-label="Sign out">
+              <Icon name="signout" size={18} /><span className="nav-label">Sign out</span>
+            </button>
           </div>
         </aside>
         <main className="main">
