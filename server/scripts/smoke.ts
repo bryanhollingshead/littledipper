@@ -324,6 +324,31 @@ async function main() {
     await a.call('POST', `/api/v1/node/backups/${bk1._id ?? bk1.id}/restore`);
     const back = await fetch(`${a.base}/api/v1/files/${up.body.pages[0].id}`, { headers: asOwner() });
     ok(back.status === 200 && Buffer.from(await back.arrayBuffer()).equals(png), 'restoring a backup brings the pages back');
+    console.log('public profile sections');
+    const visitor = new Client(a.base);
+    const resumeDoc = (await json(await raw('POST', '/api/v1/documents?name=maya-resume.png&kind=resume', png, 'image/png'))).body;
+    const jobs = (await a.call('GET', '/api/v1/employment')).items;
+    await a.call('PUT', '/api/v1/public-profile', { sections: [{ type: 'domain', domain: 'employment', parts: ['title', 'currentPay'] }] }, [400]);
+    ok(true, 'secret parts can never be public');
+    await a.call('PUT', '/api/v1/public-profile', { sections: [{ type: 'domain', domain: 'health' }] }, [400]);
+    ok(true, 'non-public categories are refused');
+    await a.call('PUT', '/api/v1/public-profile', { sections: [
+      { type: 'about', text: 'Ceramicist and product designer in Portland.' }, { type: 'details' },
+      { type: 'domain', domain: 'employment', hidden: [jobs[1].id] }, { type: 'resume', documentId: resumeDoc.id },
+    ] });
+    const pubProf = await visitor.call('GET', '/public/v1/profile');
+    const work = pubProf.sections.find((x: any) => x.type === 'domain' && x.domain === 'employment');
+    ok(pubProf.sections.map((x: any) => x.type).join(',') === 'about,details,domain,resume' && pubProf.fields.length > 0, 'sections come back in the owner’s order (fields kept for old clients)');
+    ok(work.title === 'Work history' && work.items.length === 1 && work.items[0].title === 'Design lead at Alder Studio', 'work history shows chosen jobs, hidden ones stay off');
+    ok(!JSON.stringify(work).includes('120000') && !JSON.stringify(work).includes('AS-0042'), 'pay and employee ID never appear');
+    const resumeSec = pubProf.sections.find((x: any) => x.type === 'resume');
+    ok((await fetch(a.base + resumeSec.document.pages[0].url)).status === 200, 'visitors can download the résumé');
+    const other = (await json(await raw('POST', '/api/v1/documents?name=private.png', png, 'image/png'))).body;
+    ok((await fetch(`${a.base}/public/v1/profile/files/${other.pages[0].id}`)).status === 404, 'other documents stay private');
+    const av = await (await raw('PUT', '/api/v1/public-profile/avatar?name=me.png', png, 'image/png')).json();
+    const prof2 = await visitor.call('GET', '/public/v1/profile');
+    ok(prof2.avatarUrl === av.avatarUrl && (await fetch(a.base + av.avatarUrl)).status === 200, 'profile photo is public');
+    await a.call('PUT', '/api/v1/public-profile', { sections: [{ type: 'details' }] });
     console.log('messaging');
     const wk = await (await fetch(a.base + '/.well-known/little-dipper')).json();
     ok(wk.kind === 'node' && wk.capabilities?.includes('messages'), 'descriptor advertises the messages capability');

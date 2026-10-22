@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { addr, copy, get } from '../api';
-import { Circle, Dialog, ErrorNote, Loading, Striped, useAsync, useToast } from '../ui';
+import { Circle, Dialog, ErrorNote, Loading, useAsync, useToast } from '../ui';
+import { ProfileView, type ProfileViewData } from '../profile';
 
-type Profile = { displayName: string; headline: string; fields: { key: string; label: string; value: string }[]; connectRequests: 'off' | 'fof' | 'anyone'; address: string; ownerFirstName: string };
+type Profile = ProfileViewData & { connectRequests: 'off' | 'fof' | 'anyone'; address: string; ownerFirstName: string };
 
 export default function PublicProfile() {
   const toast = useToast();
@@ -39,17 +40,7 @@ export default function PublicProfile() {
             {p.connectRequests !== 'off' && <button className="btn btn-primary" onClick={() => setConnect(true)}>Connect with me</button>}
           </div>
         </div>
-        <div style={{ marginBottom: 24 }}><Striped size={132} label="portrait" /></div>
-        <h1 style={{ fontSize: 56, marginBottom: 6 }}>{p.displayName}</h1>
-        {p.headline && <p style={{ fontSize: 19, maxWidth: 540, textWrap: 'pretty' }}>{p.headline}</p>}
-        <div style={{ display: 'grid', marginTop: 40, maxWidth: 560 }}>
-          {p.fields.map((f) => (
-            <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 20, padding: '14px 0', borderBottom: '1px solid var(--color-divider)', flexWrap: 'wrap' }}>
-              <span className="text-muted">{f.label}</span><span style={{ textAlign: 'right' }}>{f.value}</span>
-            </div>
-          ))}
-        </div>
-        {p.fields.length === 0 && <p className="text-muted" style={{ marginTop: 32 }}>This owner hasn't made any details public.</p>}
+        <ProfileView p={p} />
         <p className="text-muted" style={{ fontSize: 12, marginTop: 56 }}>Your data, not your definition.{!isOwner && <> · <Link to="/login" style={{ color: 'inherit' }}>Owner sign in</Link></>}</p>
       </div>
 

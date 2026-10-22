@@ -112,6 +112,8 @@ export type PublicProfileDoc = Doc & {
   avatarFileId: string | null;
   fieldKeys: string[];
   connectRequests: 'off' | 'fof' | 'anyone';
+  /** Layout of the public page. Missing on profiles from before sections: just the details. */
+  sections?: import('./publicProfile.js').PublicSection[];
 };
 
 export const REQUEST_TTL_DAYS = 14;

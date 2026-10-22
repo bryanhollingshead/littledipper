@@ -15,6 +15,9 @@ import {
 import { buildRecord, getDomain, listDomains, recordOut, syncDerived, type RecordDoc, type RecordInput } from '../domains/records.js';
 import { FILE_TYPES, MAX_FILE_BYTES, readFile, saveFile, type FileDoc, type Source } from '../files.js';
 import { canonicalUrl, getNode } from '../node.js';
+import type { PublicProfileDoc } from '../federation.js';
+import { defaultParts, publicFileIds, publicParts } from '../publicProfile.js';
+import { isCurrent, recordsOf, sortRecords } from '../domains/records.js';
 
 type ShareDoc = { _id: string; documentId: string; tokenHash: string; expiresAt: string; revokedAt: string | null; views: number; lastViewedAt: string | null; createdAt: string };
 const SHARE_HOURS = [1, 24, 24 * 7, 24 * 30];
@@ -251,6 +254,46 @@ export default async function documentRoutes(app: FastifyInstance) {
     reply.header('cache-control', 'private, no-store');
     reply.header('x-robots-tag', 'noindex');
     return reply.send(await sendFile(reply, f, (req.query as { download?: string }).download === '1'));
+  });
+
+  // ── public profile: photo, résumé pages, and what sections can show ────
+  app.put('/api/v1/public-profile/avatar', async (req) => {
+    const p = await requireOwner(req, 'public:write');
+    const { type, data } = bodyBytes(req);
+    if (!/^image\/(jpeg|png|webp|gif)$/.test(type)) throw bad('unsupported_type', 'Use a JPEG, PNG or WebP photo');
+    // Kept as a document too, so it's in the library, backups and export.
+    const page = await saveFile(String((req.query as { name?: string }).name || 'profile-photo.jpg'), type, data, sourceOf(p));
+    await createDocument({ title: 'Profile photo', kind: 'photo', status: 'filed', links: [], page, from: sourceOf(p) });
+    await ctx.store.update('publicProfile', 'public', { avatarFileId: page._id });
+    await audit({ actor: ownerActor(p.key._id), action: 'public.update', resource: 'publicProfile', text: 'You changed your public profile photo', tone: 'owner' });
+    return { avatarUrl: `/public/v1/profile/files/${page._id}` };
+  });
+
+  app.delete('/api/v1/public-profile/avatar', async (req) => {
+    await requireOwner(req, 'public:write');
+    await ctx.store.update('publicProfile', 'public', { avatarFileId: null });
+    return { avatarUrl: null };
+  });
+
+  app.get('/public/v1/profile/files/:fileId', async (req, reply) => {
+    const pp = await ctx.store.get<PublicProfileDoc>('publicProfile', 'public');
+    const fileId = (req.params as { fileId: string }).fileId;
+    const f = pp && (await publicFileIds(pp)).has(fileId) ? await ctx.store.get<FileDoc>('files', fileId) : null;
+    if (!f) throw notFound('file_not_found');
+    reply.header('cache-control', 'public, max-age=300');
+    return reply.send(await sendFile(reply, f, (req.query as { download?: string }).download === '1'));
+  });
+
+  app.get('/api/v1/public-profile/options', async (req) => {
+    await requireOwner(req, 'owner:read');
+    const domains = (await listDomains()).filter((d) => d.publicable);
+    return {
+      domains: await Promise.all(domains.map(async (d) => ({
+        domain: d.id, label: d.label, dated: d.dated,
+        parts: publicParts(d).map((x) => ({ key: x.key, label: x.label })), defaultParts: defaultParts(d),
+        records: sortRecords(d, await recordsOf(d.id)).map((r) => ({ id: r._id, title: recordOut(d, r).title, current: isCurrent(d, r), validFrom: r.validFrom, validTo: r.validTo })),
+      }))),
+    };
   });
 
   // ── export: every document's pages, decrypted, as a .tar ──────────────

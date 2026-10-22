@@ -8,20 +8,13 @@ import { sendSigned, tokenHash, type ContactDoc, type InviteDoc, type LinkDoc, t
 import { endLink } from '../contacts.js';
 import { listDomains } from '../domains/records.js';
 import { getOwner } from '../owner.js';
+import { checkSections, publicFields, publicView, sectionsOf } from '../publicProfile.js';
 import type { AuditDoc } from '../audit.js';
 
 async function profileDoc() {
   const pp = await ctx.store.get<PublicProfileDoc>('publicProfile', 'public');
   if (!pp) throw notFound('not_claimed');
   return pp;
-}
-
-async function publicFields(pp: PublicProfileDoc) {
-  const fields = await allFields();
-  return pp.fieldKeys
-    .map((k) => fields.find((f) => f.key === k))
-    .filter((f) => f && f.sensitivity !== 'secret' && plainValue(f))
-    .map((f) => ({ key: f!.key, label: f!.label, value: plainValue(f!) }));
 }
 
 export default async function miscRoutes(app: FastifyInstance) {
@@ -36,8 +29,9 @@ export default async function miscRoutes(app: FastifyInstance) {
       await ctx.store.update('nodes', n._id, { publicViews: { day, count: n.publicViews?.day === day ? n.publicViews.count + 1 : 1 } });
     }
     const o = await getOwner();
+    // `fields` stays for older clients; `sections` is the profile as laid out.
     return {
-      displayName: pp.displayName, headline: pp.headline, fields: await publicFields(pp),
+      ...(await publicView(pp)), fields: await publicFields(pp),
       connectRequests: pp.connectRequests, address: canonicalUrl(n), ownerFirstName: (o?.displayName || pp.displayName).split(' ')[0],
     };
   });
@@ -55,13 +49,13 @@ export default async function miscRoutes(app: FastifyInstance) {
   app.get('/api/v1/public-profile', async (req) => {
     await requireOwner(req, 'owner:read');
     const pp = await profileDoc();
-    return { ...pp, fields: await publicFields(pp) };
+    return { ...pp, sections: sectionsOf(pp), fields: await publicFields(pp), view: await publicView(pp) };
   });
 
   app.put('/api/v1/public-profile', async (req) => {
     const p = await requireOwner(req, 'public:write');
     const pp = await profileDoc();
-    const b = (req.body || {}) as Partial<Pick<PublicProfileDoc, 'displayName' | 'headline' | 'fieldKeys' | 'connectRequests'>>;
+    const b = (req.body || {}) as Partial<Pick<PublicProfileDoc, 'displayName' | 'headline' | 'fieldKeys' | 'connectRequests' | 'sections'>>;
     const patch: Partial<PublicProfileDoc> = {};
     if (b.displayName !== undefined) patch.displayName = String(b.displayName).slice(0, 120);
     if (b.headline !== undefined) patch.headline = String(b.headline).slice(0, 280);
@@ -74,17 +68,18 @@ export default async function miscRoutes(app: FastifyInstance) {
       }
       patch.fieldKeys = [...new Set(b.fieldKeys)];
     }
+    if (b.sections !== undefined) patch.sections = await checkSections(b.sections);
     if (b.connectRequests !== undefined) {
       if (!['off', 'fof', 'anyone'].includes(b.connectRequests)) throw bad('bad_connect_requests');
       patch.connectRequests = b.connectRequests;
     }
     await ctx.store.update('publicProfile', 'public', patch);
     const what = [
-      patch.fieldKeys && 'visible fields', patch.connectRequests && 'connection requests', (patch.displayName !== undefined || patch.headline !== undefined) && 'header',
+      patch.fieldKeys && 'visible fields', patch.sections && 'sections', patch.connectRequests && 'connection requests', (patch.displayName !== undefined || patch.headline !== undefined) && 'header',
     ].filter(Boolean).join(', ');
     await audit({ actor: ownerActor(p.key._id), action: 'public.update', resource: 'publicProfile', text: `You changed your public profile (${what})`, tone: 'owner' });
     const out = await profileDoc();
-    return { ...out, fields: await publicFields(out) };
+    return { ...out, sections: sectionsOf(out), fields: await publicFields(out), view: await publicView(out) };
   });
 
   // ── keys ─────────────────────────────────────────────────────────────

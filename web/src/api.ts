@@ -111,7 +111,7 @@ export const fileUrl = (id: string) => `/api/v1/files/${id}`;
 export const FILE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf';
 
 /** Phone photos are 3–8 MB; a receipt reads fine at 2000px. Anything the browser can't draw goes up as-is. */
-async function shrink(file: File): Promise<Blob> {
+export async function shrink(file: File): Promise<Blob> {
   if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 1_500_000) return file;
   try {
     const img = await createImageBitmap(file);
