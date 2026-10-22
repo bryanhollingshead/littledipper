@@ -29,7 +29,7 @@ export default function Category() {
   const [editing, setEditing] = useState<Rec | 'new' | null>(null);
 
   const d = catalog?.find((x) => x.id === domain);
-  if (error) return <div><Link className="btn btn-ghost" to="/admin/life">← My life</Link><ErrorNote error={error} /></div>;
+  if (error) return <div><Link className="btn btn-ghost" to="/admin/life">← My data</Link><ErrorNote error={error} /></div>;
   if (!d || !data) return <Loading />;
   const g = groupOf(d.group);
   const current = d.dated ? data.items.filter((r) => r.current) : data.items;
@@ -38,7 +38,7 @@ export default function Category() {
 
   return (
     <div data-screen-label={d.label} style={{ maxWidth: 980 }}>
-      <Link className="btn btn-ghost" to="/admin/life" style={{ marginBottom: 14 }}>← My life</Link>
+      <Link className="btn btn-ghost" to="/admin/life" style={{ marginBottom: 14 }}>← My data</Link>
       <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
         <Mono d={d} size={64} />
         <div style={{ flex: 1, minWidth: 260 }}>

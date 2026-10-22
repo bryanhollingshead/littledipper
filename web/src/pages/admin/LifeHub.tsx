@@ -26,10 +26,10 @@ export default function LifeHub() {
   const core = fields?.items.filter((f) => ['legal_name', 'preferred_name', 'dob'].includes(f.key)) ?? [];
 
   return (
-    <div data-screen-label="My life" style={{ maxWidth: 1100 }}>
+    <div data-screen-label="My data" style={{ maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1>My life</h1>
+          <h1>My data</h1>
           <p className="text-muted" style={{ margin: 0, maxWidth: 640 }}>Everything about you, kept in one place. Only you see this page. You choose, category by category, what each contact and each app can see.</p>
         </div>
         <input className="input" aria-label="Find a category" placeholder="Find a category" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 260 }} />

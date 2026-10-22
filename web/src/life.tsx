@@ -1,4 +1,4 @@
-/** Shared pieces for the "My life" area: catalog types, group styling, dates, and the schema-driven record editor. */
+/** Shared pieces for the "My data" area: catalog types, group styling, dates, and the schema-driven record editor. */
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { bytes, del, FILE_ACCEPT, fileUrl, get, patch, post, uploadFile, type FileRef, type Sensitivity } from './api';
 import { Confirm, Pills, Toggle, useAction, type ConfirmCfg } from './ui';

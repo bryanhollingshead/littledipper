@@ -49,9 +49,9 @@ export default function MyData() {
     <div data-screen-label="My data" style={{ maxWidth: 960 }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <Link className="btn btn-ghost" to="/admin/life" style={{ marginBottom: 14 }}>← My life</Link>
+          <Link className="btn btn-ghost" to="/admin/life" style={{ marginBottom: 14 }}>← My data</Link>
           <h1>Profile basics</h1>
-          <p className="text-muted" style={{ margin: 0, maxWidth: 620 }}>The core facts about you. Your basic profile (shared with every connection) and your public page are built from these. Histories like homes and jobs live in their own categories in My life.</p>
+          <p className="text-muted" style={{ margin: 0, maxWidth: 620 }}>The core facts about you. Your basic profile (shared with every connection) and your public page are built from these. Histories like homes and jobs live in their own categories in My data.</p>
         </div>
         <button className="btn btn-secondary" onClick={() => setAdding({ label: '', value: '', sensitivity: 'sensitive', section: 'custom' })}>Add a field</button>
       </div>

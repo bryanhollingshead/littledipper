@@ -55,7 +55,7 @@ export default function Home() {
           {reqs && inbox.length === 0 && <div className="text-muted" style={{ fontSize: 14 }}>Nothing waiting.</div>}
         </div>
         <div className="card" style={{ padding: '22px 24px', gap: 10 }}>
-          <div className="card-kicker">My life</div>
+          <div className="card-kicker">My data</div>
           <div className="card-title" style={{ fontSize: 20 }}>{started} of {catalog?.length ?? '…'} categories started</div>
           <div className="card-body">{entries} entries so far. Nothing is shared unless you choose to.</div>
           <div style={{ display: 'flex', gap: 4 }} aria-label="Categories started per group">
@@ -69,7 +69,7 @@ export default function Home() {
               );
             })}
           </div>
-          <Link className="btn btn-secondary" to="/admin/life" style={{ alignSelf: 'flex-start' }}>Open My life</Link>
+          <Link className="btn btn-secondary" to="/admin/life" style={{ alignSelf: 'flex-start' }}>Open My data</Link>
         </div>
       </div>
 
