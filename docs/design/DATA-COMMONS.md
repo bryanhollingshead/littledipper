@@ -24,7 +24,26 @@ If self-hosted Little Dippers become common, owners could **choose to contribute
 | Federated analytics with differential privacy | Queries go to the nodes; each answers with a noisy aggregate. Raw data never leaves, and there's a provable privacy guarantee. |
 | Federated learning | Model training runs on the nodes; only model updates leave, ideally with differential privacy. |
 
-The federated approaches suit Little Dipper's architecture best (data stays on the node), but they need many participating nodes to be useful.
+The federated approaches fit the architecture, but the owner doesn't want them (2026-10-22): too complex and too slow to become useful.
+
+### Leading direction: itemized contributions (2026-10-22)
+
+For receipts, the valuable information is narrow: **product code (SKU or GTIN), price and payment method.** That's mostly price-index data, and it can leave the node in a form that's hard to tie back to a person:
+
+| Sent | Not sent |
+|---|---|
+| SKU / GTIN, quantity, unit price, currency | Merchant name or store, unless it's a large chain (decide later) |
+| Payment method *type* (card, cash, stablecoin…) | Card digits, order numbers, notes, photos |
+| Week or month of purchase | Exact date or time |
+| Region (state or metro area) | Address or city |
+
+Rules that do most of the protecting:
+- **Break up the basket.** Each line item is sent on its own, with no receipt id and no contributor id. A whole basket is far more identifying than its parts.
+- **Batch and delay.** Nodes send contributions in batches some time after purchase, not as they happen.
+- **Rare items stay out.** The commons publishes a product only once enough different contributors have reported it.
+- **The owner previews it.** The node shows exactly what would be sent before anything goes.
+
+Open: rewarding contributors without linking their contributions back to them (for example per-batch rewards, or blinded reward tokens).
 
 **Other things to decide:**
 - **Consent must be honest.** Owners can stop contributing at any time, but data already aggregated or used to train a model can't be pulled back. The interface has to say so plainly.
