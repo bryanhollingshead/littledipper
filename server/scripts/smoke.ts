@@ -238,54 +238,92 @@ async function main() {
     detB = await b.call('GET', `/api/v1/contacts/${cB.id}`);
     ok(detB.sharedDomains.some((d: any) => d.domain === 'education' && d.records.length === 1), 'grant + edit nudge B to sync without asking');
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { education: false } });
-    console.log('receipts');
+    console.log('receipts & documents');
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
     const cookieOf = (c: Client) => [...c.jar].map(([k, v]) => `${k}=${v}`).join('; ');
-    const upload = (bytes: Buffer, type: string, domain = 'receipts', headers: Record<string, string> = { cookie: cookieOf(a) }) =>
-      fetch(`${a.base}/api/v1/files?domain=${domain}&name=receipt.png`, { method: 'POST', headers: { origin: a.base, 'content-type': type, ...headers }, body: bytes });
-    const up1 = await upload(png, 'image/png');
-    const file1 = await up1.json();
-    ok(up1.status === 201 && file1.id.startsWith('fil_') && file1.size === png.length, 'upload a receipt photo');
-    ok((await upload(Buffer.from('not really a png'), 'image/png')).status === 400, 'contents must match the declared type');
-    ok((await upload(Buffer.from('hello'), 'text/plain')).status === 415, 'only photos and PDFs are accepted');
-    ok((await upload(png, 'image/png', 'employment')).status === 400, "categories without files don't take uploads");
+    const asOwner = () => ({ cookie: cookieOf(a) });
+    const raw = (method: string, p: string, bytes: Buffer, type: string, headers: Record<string, string> = asOwner()) =>
+      fetch(a.base + p, { method, headers: { origin: a.base, 'content-type': type, ...headers }, body: bytes });
+    const json = async (r: Response) => ({ status: r.status, body: await r.json() });
+    // Upload into the inbox
+    const up = await json(await raw('POST', '/api/v1/documents?name=license-front.png', png, 'image/png'));
+    ok(up.status === 201 && up.body.status === 'inbox' && up.body.title === 'license-front' && up.body.pages.length === 1, 'upload lands in the documents inbox');
+    ok((await raw('POST', '/api/v1/documents?name=x.png', Buffer.from('not really a png'), 'image/png')).status === 400, 'contents must match the declared type');
+    ok((await raw('POST', '/api/v1/documents?name=x.txt', Buffer.from('hello'), 'text/plain')).status === 415, 'only photos and PDFs are accepted');
+    const twoPages = await json(await raw('POST', `/api/v1/documents/${up.body.id}/pages?name=license-back.png`, png, 'image/png'));
+    ok(twoPages.body.pages.length === 2, 'a second page (the back of the card)');
+    const got = await fetch(`${a.base}/api/v1/files/${up.body.pages[0].id}`, { headers: asOwner() });
+    ok(got.status === 200 && got.headers.get('content-type') === 'image/png' && Buffer.from(await got.arrayBuffer()).equals(png), 'a page comes back byte for byte');
+    // An assistant reads it and suggests an entry; the owner accepts
+    const helper = await a.call('POST', '/api/v1/keys', { name: 'Document reader', scopes: ['documents:read', 'documents:write'] });
+    const asHelper = { authorization: `Bearer ${helper.secret}` };
+    const inbox = await (await fetch(`${a.base}/api/v1/documents?status=inbox`, { headers: asHelper })).json();
+    ok(inbox.items.some((d: any) => d.id === up.body.id), 'an assistant key finds new documents in the inbox');
+    const bad = await fetch(`${a.base}/api/v1/documents/${up.body.id}/suggestions`, { method: 'POST', headers: { ...asHelper, 'content-type': 'application/json' }, body: JSON.stringify({ domain: 'ids', data: { kind: 'drivers_license', number: 'WDL123', expires: 'soon' } }) });
+    ok(bad.status === 400, 'a suggestion with invalid values is refused up front');
+    const sug = await (await fetch(`${a.base}/api/v1/documents/${up.body.id}/suggestions`, { method: 'POST', headers: { ...asHelper, 'content-type': 'application/json' }, body: JSON.stringify({ domain: 'ids', data: { kind: 'drivers_license', number: 'WDL123', issuer: 'US', authority: 'WA', expires: '2030-05-01' }, note: 'Washington license, front and back' }) })).json();
+    ok(sug.suggestions.length === 1 && sug.status === 'inbox', 'the assistant leaves a suggestion; nothing is changed yet');
+    const self = await fetch(`${a.base}/api/v1/documents/${up.body.id}/suggestions/${sug.suggestions[0].id}/accept`, { method: 'POST', headers: { ...asHelper, 'content-type': 'application/json' }, body: '{}' });
+    ok(self.status === 403, "an assistant can't accept its own suggestion");
+    await fetch(`${a.base}/api/v1/documents/${up.body.id}`, { method: 'PATCH', headers: { ...asHelper, 'content-type': 'application/json' }, body: JSON.stringify({ text: 'WASHINGTON DRIVER LICENSE WDL123' }) });
+    ok((await a.call('GET', '/api/v1/documents?q=wdl123')).items.length === 1, 'text read by the assistant makes the document searchable');
+    const accepted = await a.call('POST', `/api/v1/documents/${up.body.id}/suggestions/${sug.suggestions[0].id}/accept`, {});
+    ok(accepted.record.domain === 'ids' && accepted.record.source.type === 'app' && accepted.document.status === 'filed' && accepted.document.links[0].recordId === accepted.record.id && !accepted.document.suggestions.length, 'owner accepts: the ID entry is created, linked and the document filed');
+    const idsList = (await a.call('GET', '/api/v1/ids')).items;
+    ok(idsList.find((r: any) => r.id === accepted.record.id).documents[0].pages.length === 2, 'the ID entry shows its card scan (front and back)');
+    // Scopes follow links
+    const emp2 = await a.call('POST', '/api/v1/keys', { name: 'Jobs only', scopes: ['employment:read'] });
+    ok((await fetch(`${a.base}/api/v1/files/${up.body.pages[0].id}`, { headers: { authorization: `Bearer ${emp2.secret}` } })).status === 403, "a key for another category can't open the scan");
+    // Share link for someone without a Little Dipper
+    const share = await a.call('POST', `/api/v1/documents/${up.body.id}/shares`, { hours: 24 });
+    const token = share.url.split('/s/')[1];
+    const viewed = await (await fetch(`${a.base}/public/v1/shared/${token}`)).json();
+    ok(viewed.title === 'license-front' && viewed.pages.length === 2 && viewed.sharedBy === 'Maya Lindqvist', 'a share link opens without signing in');
+    ok((await fetch(`${a.base}/public/v1/shared/${token}/files/${viewed.pages[1].id}`)).status === 200, 'pages load through the share link');
+    ok((await fetch(`${a.base}/public/v1/shared/${token.split('.')[0]}.wrong`)).status === 404, 'a wrong token gets nothing');
+    ok((await fetch(`${a.base}/api/v1/documents/${up.body.id}/shares`, { method: 'POST', headers: { ...asHelper, 'content-type': 'application/json' }, body: '{"hours":24}' })).status === 403, 'only the owner can create share links');
+    await a.call('DELETE', `/api/v1/documents/${up.body.id}/shares/${share.id}`);
+    ok((await fetch(`${a.base}/public/v1/shared/${token}`)).status === 404, 'turning a share link off works at once');
+    // Receipts: a photo becomes a receipt document linked to the entry
     const soon = new Date(Date.now() + 10 * 86400_000).toISOString().slice(0, 10);
     const rc1 = await a.call('POST', '/api/v1/receipts', { data: {
-      merchant: 'Blue Bottle', purchased: '2026-10-01', total: { amount: 12.5, currency: 'USD' }, files: [file1.id], returnBy: soon,
+      merchant: 'Blue Bottle', purchased: '2026-10-01', total: { amount: 12.5, currency: 'USD' }, returnBy: soon,
       items: [{ description: 'Latte', quantity: 2, price: { amount: 5, currency: 'USD' } }, { description: '', quantity: '' }, { description: 'Scone', price: { amount: 2.5, currency: 'USD' } }],
     } });
-    ok(rc1.title === 'Blue Bottle · $12.50' && rc1.data.items.length === 2 && rc1.data.files[0].name === 'receipt.png', 'receipt with line items and a photo (blank rows dropped)');
-    const got = await fetch(`${a.base}/api/v1/files/${file1.id}`, { headers: { cookie: cookieOf(a) } });
-    ok(got.status === 200 && got.headers.get('content-type') === 'image/png' && Buffer.from(await got.arrayBuffer()).equals(png), 'the photo comes back byte for byte');
-    await a.call('POST', '/api/v1/receipts', { data: { merchant: 'Elsewhere', files: [file1.id] } }, [400]);
-    ok(true, "a file can't be attached to two receipts");
+    ok(rc1.title === 'Blue Bottle · $12.50' && rc1.data.items.length === 2, 'receipt with line items (blank rows dropped)');
+    const rdoc = (await json(await raw('POST', `/api/v1/documents?name=bluebottle.png&link=receipts:${rc1.id}`, png, 'image/png'))).body;
+    ok(rdoc.kind === 'receipt' && rdoc.status === 'filed' && rdoc.links[0].title === 'Blue Bottle · $12.50', 'a receipt photo is filed as a receipt document on that receipt');
     await a.call('POST', '/api/v1/receipts', { data: { items: [{ quantity: 1 }] } }, [400]);
     ok(true, 'line items need a description');
-    // An assistant with receipts:write: upload a photo, file it, fill the details in later.
-    const helper = await a.call('POST', '/api/v1/keys', { name: 'Receipt reader', scopes: ['receipts:read', 'receipts:write'] });
-    const asHelper = { authorization: `Bearer ${helper.secret}` };
-    const file2 = await (await upload(png, 'image/png', 'receipts', asHelper)).json();
-    const rc2 = await (await fetch(`${a.base}/api/v1/receipts`, { method: 'POST', headers: { ...asHelper, 'content-type': 'application/json' }, body: JSON.stringify({ data: { files: [file2.id], capturedVia: 'assistant' } }) })).json();
-    ok(rc2.title === 'receipt' && !rc2.data.merchant, 'a photo alone is a receipt (needs details)');
-    const filled = await (await fetch(`${a.base}/api/v1/receipts/${rc2.id}`, { method: 'PATCH', headers: { ...asHelper, 'content-type': 'application/json' }, body: JSON.stringify({ data: { merchant: 'Hardware Co', purchased: '2026-10-15', total: { amount: 89.99, currency: 'USD' }, warrantyUntil: '2028-10-15' } }) })).json();
-    ok(filled.title === 'Hardware Co · $89.99' && filled.data.files.length === 1, 'the assistant key fills in the details');
-    ok((await fetch(`${a.base}/api/v1/files/${file1.id}`, auth)).status === 403, 'a key without receipts scope cannot open receipt files');
+    const rk = await a.call('POST', '/api/v1/keys', { name: 'Receipt reader', scopes: ['receipts:read', 'receipts:write'] });
+    const asRk = { authorization: `Bearer ${rk.secret}` };
+    const rc2 = await (await fetch(`${a.base}/api/v1/receipts`, { method: 'POST', headers: { ...asRk, 'content-type': 'application/json' }, body: JSON.stringify({ data: { capturedVia: 'assistant', merchant: 'Hardware Co', purchased: '2026-10-15', total: { amount: 89.99, currency: 'USD' } } }) })).json();
+    ok((await raw('POST', `/api/v1/documents?name=hw.png&link=receipts:${rc2.id}`, png, 'image/png', asRk)).status === 201, 'a receipts key can file photos on receipts');
+    ok((await raw('POST', '/api/v1/documents?name=loose.png', png, 'image/png', asRk)).status === 403, '…but not put documents in the general library');
+    ok((await fetch(`${a.base}/api/v1/files/${up.body.pages[0].id}`, { headers: asRk })).status === 403, "…and can't open the license scan");
     const list = (await a.call('GET', '/api/v1/receipts')).items;
-    ok(list[0].id === rc2.id && list[1].id === rc1.id, 'receipts are ordered by purchase date');
+    ok(list[0].id === rc2.id && list[1].id === rc1.id && list[1].documents.length === 1, 'receipts are ordered by purchase date, with their photos');
     const att = (await a.call('GET', '/api/v1/attention?days=30')).items;
     ok(att.some((x: any) => x.id === rc1.id && x.part === 'Return by' && x.kind === 'deadline'), 'return-by date shows on Home');
-    // Sharing receipts: line items go, file ids don't.
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { receipts: { scope: 'all' } } });
     const shared = (await b.call('GET', `/api/v1/contacts/${cB.id}?sync=1`)).sharedDomains.find((d: any) => d.domain === 'receipts');
-    ok(shared?.records.length === 2 && shared.records.every((r: any) => !('files' in r.data)) && shared.records.some((r: any) => r.data.items?.length === 2), 'shared receipts carry items, not file ids');
+    ok(shared?.records.length === 2 && shared.records.some((r: any) => r.data.items?.length === 2), 'shared receipts carry their line items');
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { receipts: false } });
-    // Dropping a file from a receipt deletes it; deleting the receipt deletes the rest.
-    await a.call('PATCH', `/api/v1/receipts/${rc2.id}`, { data: { files: null } });
-    ok((await fetch(`${a.base}/api/v1/files/${file2.id}`, { headers: { cookie: cookieOf(a) } })).status === 404, 'removing a photo from a receipt deletes the file');
-    await a.call('DELETE', `/api/v1/receipts/${rc1.id}`);
-    ok((await fetch(`${a.base}/api/v1/files/${file1.id}`, { headers: { cookie: cookieOf(a) } })).status === 404, 'deleting a receipt deletes its photo');
-    const loose = await (await upload(png, 'image/png')).json();
-    ok((await a.call('DELETE', `/api/v1/files/${loose.id}`)).deleted, 'an upload never saved on a receipt can be deleted');
+    // Deleting an entry deletes documents linked only to it, and unlinks shared ones
+    await a.call('PATCH', `/api/v1/documents/${up.body.id}`, { links: [{ domain: 'ids', recordId: accepted.record.id }, { domain: 'receipts', recordId: rc1.id }] });
+    const del1 = await a.call('DELETE', `/api/v1/receipts/${rc1.id}`);
+    ok(del1.documentsDeleted === 1 && (await fetch(`${a.base}/api/v1/files/${rdoc.pages[0].id}`, { headers: asOwner() })).status === 404, 'deleting a receipt deletes its photo');
+    ok((await a.call('GET', `/api/v1/documents/${up.body.id}`)).links.length === 1, '…while a document linked elsewhere just loses that link');
+    // Export and backups include pages
+    const tarRes = await fetch(`${a.base}/api/v1/export/documents`, { headers: asOwner() });
+    const tarBuf = Buffer.from(await tarRes.arrayBuffer());
+    ok(tarRes.status === 200 && tarBuf.subarray(257, 262).toString() === 'ustar' && tarBuf.includes(png), 'documents export is a .tar with the pages');
+    const bk1 = await a.call('POST', '/api/v1/node/backups');
+    await a.call('DELETE', `/api/v1/documents/${up.body.id}`);
+    ok((await fetch(`${a.base}/api/v1/files/${up.body.pages[0].id}`, { headers: asOwner() })).status === 404, 'deleting a document deletes its pages');
+    await a.call('POST', `/api/v1/node/backups/${bk1._id ?? bk1.id}/restore`);
+    const back = await fetch(`${a.base}/api/v1/files/${up.body.pages[0].id}`, { headers: asOwner() });
+    ok(back.status === 200 && Buffer.from(await back.arrayBuffer()).equals(png), 'restoring a backup brings the pages back');
     console.log('messaging');
     const wk = await (await fetch(a.base + '/.well-known/little-dipper')).json();
     ok(wk.kind === 'node' && wk.capabilities?.includes('messages'), 'descriptor advertises the messages capability');

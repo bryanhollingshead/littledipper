@@ -1,6 +1,7 @@
 /** Shared pieces for the "My data" area: catalog types, group styling, dates, and the schema-driven record editor. */
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { bytes, del, FILE_ACCEPT, fileUrl, get, patch, post, uploadFile, type FileRef, type Sensitivity } from './api';
+import { del, FILE_ACCEPT, get, patch, post, uploadDocument, type DocRef, type Sensitivity } from './api';
+import { DocTiles } from './docs';
 import { Confirm, Pills, Toggle, useAction, type ConfirmCfg } from './ui';
 
 // ── types ──────────────────────────────────────────────────────────────
@@ -8,10 +9,13 @@ export type Part = { key: string; label: string; type: string; required?: boolea
 export type Domain = {
   id: string; label: string; noun: string; group: string; description: string; sensitivity: Sensitivity; dated: boolean; builtIn: boolean;
   parts: Part[]; title: string; count: number; currentCount: number; preview: string[]; sharedWith: number; feeds: string[];
+  /** Entries take linked documents; new ones get this kind. */
+  documents?: string;
 };
 export type Rec = {
   id: string; domain: string; title: string; data: Record<string, unknown>; masked: string[]; validFrom: string | null; validTo: string | null;
   current: boolean; notes: string; createdAt: string; updatedAt: string;
+  documents?: DocRef[];
 };
 export type ContactLite = { id: string; displayName: string };
 
@@ -100,7 +104,6 @@ export function show(p: Part, v: unknown, contacts: ContactLite[]): string {
     case 'country': return countryName(String(v));
     case 'money': return money(v as { amount: number; currency: string });
     case 'list': { const n = (v as unknown[]).length; return n ? `${n} ${n === 1 ? 'row' : 'rows'}` : ''; }
-    case 'files': { const n = (v as unknown[]).length; return n ? `${n} file${n === 1 ? '' : 's'}` : ''; }
     case 'boolean': return v ? 'Yes' : 'No';
     case 'date': return fmtDate(String(v));
     case 'contact': return contacts.find((c) => c.id === v)?.displayName ?? 'Removed contact';
@@ -134,7 +137,7 @@ export function PartialDate({ value, onChange, id }: { value: string; onChange: 
   );
 }
 
-function PartInput({ p, value, onChange, contacts, hiddenSaved, domain, currency }: { p: Part; value: unknown; onChange: (v: unknown) => void; contacts: ContactLite[]; hiddenSaved: boolean; domain: string; currency: string }) {
+function PartInput({ p, value, onChange, contacts, hiddenSaved, currency }: { p: Part; value: unknown; onChange: (v: unknown) => void; contacts: ContactLite[]; hiddenSaved: boolean; currency: string }) {
   const id = `part-${p.key}`;
   const ph = hiddenSaved ? 'Saved and hidden · type to replace' : p.hint || '';
   switch (p.type) {
@@ -161,8 +164,6 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, domain, currency
         </div>
       );
     }
-    case 'files':
-      return <FilesInput domain={domain} value={(value as FileRef[] | undefined) ?? []} onChange={onChange} />;
     case 'list':
       return <ListInput p={p} value={(value as Row[] | undefined) ?? []} onChange={onChange} currency={currency} />;
     case 'last4':
@@ -172,51 +173,6 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, domain, currency
     default:
       return <input id={id} className="input" type={p.type === 'email' ? 'email' : p.type === 'phone' ? 'tel' : p.type === 'url' ? 'url' : 'text'} placeholder={ph} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} />;
   }
-}
-
-// ── attached files ─────────────────────────────────────────────────────
-const isImage = (f: FileRef) => /^image\/(jpeg|png|webp|gif)$/.test(f.type);
-
-/** One attached file: a thumbnail for photos, a labelled tile for PDFs and HEIC. Opens full size in a new tab. */
-export function FileTile({ f, size = 92, onRemove }: { f: FileRef; size?: number; onRemove?: () => void }) {
-  return (
-    <div style={{ position: 'relative', width: size, height: size, flex: 'none' }}>
-      <a href={fileUrl(f.id)} target="_blank" rel="noreferrer" title={`${f.name} · ${bytes(f.size)}`}
-        style={{ display: 'grid', placeItems: 'center', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', background: 'var(--color-neutral-200)', color: 'var(--color-neutral-700)', textDecoration: 'none', fontSize: 11 }}>
-        {isImage(f) ? <img src={fileUrl(f.id)} alt={f.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <span style={{ display: 'grid', gap: 2, justifyItems: 'center', padding: 6, textAlign: 'center' }}><strong style={{ fontSize: 13 }}>{f.type === 'application/pdf' ? 'PDF' : 'Photo'}</strong><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: size - 12 }}>{f.name}</span></span>}
-      </a>
-      {onRemove && <button type="button" className="btn btn-secondary" aria-label={`Remove ${f.name}`} onClick={onRemove} style={{ position: 'absolute', top: -6, right: -6, width: 24, height: 24, padding: 0, fontSize: 13 }}>×</button>}
-    </div>
-  );
-}
-
-function FilesInput({ domain, value, onChange }: { domain: string; value: FileRef[]; onChange: (v: FileRef[]) => void }) {
-  const [busy, setBusy] = useState(0);
-  const [err, setErr] = useState('');
-  const add = async (list: FileList | null) => {
-    if (!list?.length) return;
-    setErr('');
-    setBusy(list.length);
-    const added: FileRef[] = [];
-    for (const f of Array.from(list)) {
-      try { added.push(await uploadFile(domain, f)); } catch (e) { setErr(`${f.name}: ${(e as Error).message}`); }
-    }
-    setBusy(0);
-    onChange([...value, ...added]);
-  };
-  return (
-    <div style={{ display: 'grid', gap: 6 }}>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        {value.map((f) => <FileTile key={f.id} f={f} onRemove={() => onChange(value.filter((x) => x.id !== f.id))} />)}
-        <label style={{ width: 92, height: 92, borderRadius: 16, border: '1.5px dashed var(--color-neutral-400)', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, cursor: 'pointer', color: 'var(--color-neutral-700)', padding: 6 }}>
-          {busy ? <span className="spin">Uploading…</span> : <span>+ Photo<br />or PDF</span>}
-          <input type="file" accept={FILE_ACCEPT} multiple hidden onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
-        </label>
-      </div>
-      {err && <div style={{ color: 'var(--color-accent-700)', fontSize: 12 }}>{err}</div>}
-    </div>
-  );
 }
 
 // ── list parts: a small table, one row per item ───────────────────────
@@ -273,7 +229,7 @@ function cleanRows(p: Part, rows: Row[]): Row[] {
 const titleKeys = (d: Domain) => [...d.title.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
 
 // ── the editor: a side panel generated from the domain's schema ───────
-export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: { d: Domain; rec: Rec | null; contacts: ContactLite[]; onClose: () => void; onSaved: () => void; defaults?: Record<string, unknown> }) {
+export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: { d: Domain; rec: Rec | null; contacts: ContactLite[]; onClose: () => void; onSaved: (saved?: Rec) => void; defaults?: Record<string, unknown> }) {
   const { run, busy } = useAction();
   const [vals, setVals] = useState<Record<string, unknown>>(() => {
     if (!rec) return { ...defaults };
@@ -288,6 +244,33 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   const [more, setMore] = useState(false);
   const [error, setError] = useState('');
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
+  const [docs, setDocs] = useState<DocRef[]>(rec?.documents ?? []);
+  const [pending, setPending] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  /** Existing entries upload at once; new ones wait until saved. */
+  const addDocs = async (files: File[]) => {
+    if (!rec) return setPending((p) => [...p, ...files]);
+    setUploading(true);
+    for (const f of files) {
+      try { const doc = await uploadDocument(f, { link: { domain: d.id, recordId: rec.id } }); setDocs((x) => [...x, { ...doc, links: doc.links.map(({ domain, recordId }) => ({ domain, recordId })) }]); }
+      catch (e) { setError(`${f.name}: ${(e as Error).message}`); }
+    }
+    setUploading(false);
+  };
+  /** A document filed only here is deleted; one linked elsewhere just loses this link. */
+  const removeDoc = (doc: DocRef) => setConfirm({
+    title: doc.links.length > 1 ? 'Unlink this document?' : 'Delete this document?',
+    body: doc.links.length > 1 ? `${doc.title} stays in Documents and on its other entries.` : `${doc.title} is deleted from your Little Dipper.`,
+    cta: doc.links.length > 1 ? 'Unlink' : 'Delete',
+    onConfirm: async () => {
+      const ok = doc.links.length > 1
+        ? await run(() => patch(`/api/v1/documents/${doc.id}`, { links: doc.links.filter((l) => l.recordId !== rec!.id) }))
+        : await run(() => del(`/api/v1/documents/${doc.id}`));
+      if (ok) setDocs((x) => x.filter((y) => y.id !== doc.id));
+      setConfirm(null);
+    },
+  });
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && !confirm && onClose();
@@ -320,23 +303,23 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
       }
       if (p.type === 'number' && v !== '' && v !== undefined) v = Number(v);
       if (p.type === 'list' && Array.isArray(v)) v = cleanRows(p, v as Row[]);
-      if (p.type === 'files' && Array.isArray(v)) v = (v as FileRef[]).map((f) => f.id);
       if (Array.isArray(v) && !v.length) v = rec ? null : undefined;
       data[p.key] = v === '' || v === undefined ? (rec ? null : undefined) : v;
       if (data[p.key] === undefined) delete data[p.key];
     }
     const body = { data, notes, ...(d.dated ? { validFrom: from || null, validTo: current ? null : to || null } : {}) };
     try {
-      if (rec) await patch(`/api/v1/${d.id}/${rec.id}`, body);
-      else await post(`/api/v1/${d.id}`, body);
-      onSaved();
+      const saved = rec ? await patch<Rec>(`/api/v1/${d.id}/${rec.id}`, body) : await post<Rec>(`/api/v1/${d.id}`, body);
+      // Documents picked before the entry existed go up now, filed on it.
+      for (const f of pending) await uploadDocument(f, { link: { domain: d.id, recordId: saved.id } }).catch((e) => setError(`${f.name}: ${(e as Error).message}`));
+      onSaved(saved);
     } catch (e) {
       setError((e as Error).message);
     }
   };
 
   const remove = () => setConfirm({
-    title: `Delete this ${d.noun}?`, body: `${rec!.title} is removed from your Little Dipper and from anyone you share ${d.label} with.`, cta: 'Delete',
+    title: `Delete this ${d.noun}?`, body: `${rec!.title} is removed from your Little Dipper and from anyone you share ${d.label} with.${docs.some((x) => x.links.length === 1) ? ' Documents filed only on it are deleted too.' : ''}`, cta: 'Delete',
     onConfirm: async () => { if (await run(() => del(`/api/v1/${d.id}/${rec!.id}`))) onSaved(); },
   });
 
@@ -346,7 +329,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
         {p.label}{p.required && <span aria-hidden style={{ color: 'var(--color-accent-500)' }}>*</span>}
         {p.sensitivity === 'secret' && <span className="tag tag-accent" style={{ padding: '1px 8px', fontSize: 10, gap: 4 }}><Lock style={{ width: 8, height: 9 }} />Secret</span>}
       </label>
-      <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} domain={d.id} currency={currency} />
+      <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} currency={currency} />
     </div>
   );
 
@@ -364,6 +347,21 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
         </div>
         <form onSubmit={(e) => { e.preventDefault(); save(); }} style={{ flex: 1, overflow: 'auto', padding: '4px 28px 24px', display: 'grid', gap: 14, alignContent: 'start' }}>
           {essential.map(field)}
+          {d.documents && (
+            <div className="field">
+              <label>Documents</label>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                <DocTiles docs={docs} size={84} onRemove={removeDoc} />
+                {pending.map((f, i) => (
+                  <span key={i} className="tag tag-neutral" style={{ gap: 6 }}>{f.name}<button type="button" className="bare" aria-label={`Remove ${f.name}`} onClick={() => setPending((p) => p.filter((_, j) => j !== i))}>×</button></span>
+                ))}
+                <label style={{ width: 84, height: 84, borderRadius: 16, border: '1.5px dashed var(--color-neutral-400)', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, cursor: 'pointer', color: 'var(--color-neutral-700)', padding: 6 }}>
+                  {uploading ? <span className="spin">Uploading…</span> : <span>+ Scan, photo<br />or PDF</span>}
+                  <input type="file" accept={FILE_ACCEPT} multiple hidden onChange={(e) => { addDocs(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
+                </label>
+              </div>
+            </div>
+          )}
           {d.dated && (
             <div className="card" style={{ padding: '16px 18px', gap: 10, background: 'var(--color-neutral-100)' }}>
               <div className="field"><label htmlFor="vf">From</label><PartialDate id="vf" value={from} onChange={setFrom} /></div>
@@ -401,10 +399,10 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
 /** Key/value details of a record, with masked secrets. */
 export function Details({ d, rec, revealed, contacts, skip = [] }: { d: Domain; rec: Rec; revealed?: Record<string, unknown>; contacts: ContactLite[]; skip?: string[] }) {
   const has = (p: Part) => !skip.includes(p.key) && Array.isArray(rec.data[p.key]) && (rec.data[p.key] as unknown[]).length > 0;
-  const files = d.parts.filter((p) => p.type === 'files' && has(p)).flatMap((p) => rec.data[p.key] as FileRef[]);
+  const docs = rec.documents ?? [];
   const lists = d.parts.filter((p) => p.type === 'list' && has(p) && !rec.masked.includes(p.key));
   const rows = d.parts
-    .filter((p) => p.type !== 'files' && p.type !== 'list')
+    .filter((p) => p.type !== 'list')
     .filter((p) => !skip.includes(p.key) && (rec.data[p.key] !== undefined && rec.data[p.key] !== null || rec.masked.includes(p.key)))
     .map((p) => {
       const masked = rec.masked.includes(p.key) && !revealed;
@@ -412,7 +410,7 @@ export function Details({ d, rec, revealed, contacts, skip = [] }: { d: Domain; 
       return { p, text: masked ? '••••••' : show(p, v, contacts), masked };
     })
     .filter((r) => r.text);
-  if (!rows.length && !files.length && !lists.length) return null;
+  if (!rows.length && !docs.length && !lists.length) return null;
   return (
     <>
       {rows.length > 0 && (
@@ -426,7 +424,7 @@ export function Details({ d, rec, revealed, contacts, skip = [] }: { d: Domain; 
         </dl>
       )}
       {lists.map((p) => <ListTable key={p.key} p={p} rows={(revealed?.[p.key] ?? rec.data[p.key]) as Row[]} contacts={contacts} />)}
-      {files.length > 0 && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>{files.map((f) => <FileTile key={f.id} f={f} size={72} />)}</div>}
+      {docs.length > 0 && <div style={{ marginTop: 14 }}><DocTiles docs={docs} /></div>}
     </>
   );
 }

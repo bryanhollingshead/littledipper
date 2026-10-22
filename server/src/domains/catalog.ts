@@ -39,7 +39,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'ids', label: 'Government IDs', noun: 'ID', group: 'identity', sensitivity: 'secret', dated: false, publicable: false,
+    id: 'ids', label: 'Government IDs', noun: 'ID', group: 'identity', sensitivity: 'secret', dated: false, publicable: false, documents: 'id',
     description: 'Passport, driver’s license, SSN and every other government-issued number. Numbers are encrypted.',
     title: '{kind} · {issuer}',
     parts: [
@@ -54,7 +54,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'citizenship', label: 'Citizenship & residency status', noun: 'status', group: 'identity', sensitivity: 'sensitive', dated: true, publicable: false,
+    id: 'citizenship', label: 'Citizenship & residency status', noun: 'status', group: 'identity', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'certificate',
     description: 'Citizenships and immigration statuses you hold or held.',
     title: '{status} · {country}',
     parts: [
@@ -76,7 +76,7 @@ const DEFS: Def[] = [
   },
   // ── life ─────────────────────────────────────────────────────────────
   {
-    id: 'residences', label: 'Residences', noun: 'residence', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false,
+    id: 'residences', label: 'Residences', noun: 'residence', group: 'life', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'lease',
     description: 'Where you live and have lived. Your current one feeds “Current address”, “Current city” and “Country of residence”.',
     title: '{street1}, {city}',
     parts: [
@@ -136,7 +136,7 @@ const DEFS: Def[] = [
   },
   // ── work ─────────────────────────────────────────────────────────────
   {
-    id: 'employment', label: 'Employment', noun: 'job', group: 'work', sensitivity: 'sensitive', dated: true, publicable: true,
+    id: 'employment', label: 'Employment', noun: 'job', group: 'work', sensitivity: 'sensitive', dated: true, publicable: true, documents: 'contract',
     description: 'Current and past employers, roles, supervisors and pay.',
     title: '{title} at {employer}',
     parts: [
@@ -160,7 +160,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'education', label: 'Education', noun: 'school', group: 'work', sensitivity: 'standard', dated: true, publicable: true,
+    id: 'education', label: 'Education', noun: 'school', group: 'work', sensitivity: 'standard', dated: true, publicable: true, documents: 'certificate',
     description: 'Schools, degrees and fields of study.',
     title: '{degree} · {institution}',
     parts: [
@@ -177,7 +177,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'credentials', label: 'Licenses & certifications', noun: 'credential', group: 'work', sensitivity: 'standard', dated: false, publicable: true,
+    id: 'credentials', label: 'Licenses & certifications', noun: 'credential', group: 'work', sensitivity: 'standard', dated: false, publicable: true, documents: 'certificate',
     description: 'Professional licenses and certifications, with numbers and expiry dates.',
     title: '{name} · {issuer}',
     parts: [
@@ -192,7 +192,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'military', label: 'Military service', noun: 'service period', group: 'work', sensitivity: 'sensitive', dated: true, publicable: true,
+    id: 'military', label: 'Military service', noun: 'service period', group: 'work', sensitivity: 'sensitive', dated: true, publicable: true, documents: 'certificate',
     description: 'Branch, rank and discharge.',
     title: '{branch} · {rank}',
     parts: [
@@ -205,7 +205,7 @@ const DEFS: Def[] = [
   },
   // ── health ───────────────────────────────────────────────────────────
   {
-    id: 'health', label: 'Health', noun: 'health entry', group: 'health', sensitivity: 'secret', dated: true, publicable: false,
+    id: 'health', label: 'Health', noun: 'health entry', group: 'health', sensitivity: 'secret', dated: true, publicable: false, documents: 'medical',
     description: 'Allergies, conditions, medications, immunizations, procedures, blood type and directives.',
     title: '{name} ({kind})',
     parts: [
@@ -216,7 +216,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'insurance', label: 'Insurance', noun: 'policy', group: 'health', sensitivity: 'sensitive', dated: true, publicable: false,
+    id: 'insurance', label: 'Insurance', noun: 'policy', group: 'health', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'insurance_card',
     description: 'Health, auto, home, life and every other policy.',
     title: '{kind} · {provider}',
     parts: [
@@ -233,7 +233,7 @@ const DEFS: Def[] = [
   },
   // ── money ────────────────────────────────────────────────────────────
   {
-    id: 'financial_accounts', label: 'Financial accounts', noun: 'account', group: 'money', sensitivity: 'secret', dated: true, publicable: false,
+    id: 'financial_accounts', label: 'Financial accounts', noun: 'account', group: 'money', sensitivity: 'secret', dated: true, publicable: false, documents: 'statement',
     description: 'Banks, cards, investments, retirement and loans. Only the last four digits are ever stored.',
     title: '{institution} {kind} ••{last4}',
     parts: [
@@ -246,7 +246,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'income', label: 'Income', noun: 'income entry', group: 'money', sensitivity: 'secret', dated: true, publicable: false,
+    id: 'income', label: 'Income', noun: 'income entry', group: 'money', sensitivity: 'secret', dated: true, publicable: false, documents: 'statement',
     description: 'Income by source and year.',
     title: '{source}',
     parts: [
@@ -256,7 +256,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'tax_returns', label: 'Tax returns', noun: 'return', group: 'money', sensitivity: 'secret', dated: false, publicable: false,
+    id: 'tax_returns', label: 'Tax returns', noun: 'return', group: 'money', sensitivity: 'secret', dated: false, publicable: false, documents: 'tax_form',
     description: 'One entry per filing: year, status and the numbers forms ask for.',
     title: '{year} {jurisdiction} return',
     parts: [
@@ -271,7 +271,7 @@ const DEFS: Def[] = [
   },
   // ── things ───────────────────────────────────────────────────────────
   {
-    id: 'vehicles', label: 'Vehicles', noun: 'vehicle', group: 'things', sensitivity: 'sensitive', dated: true, publicable: false,
+    id: 'vehicles', label: 'Vehicles', noun: 'vehicle', group: 'things', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'registration',
     description: 'Cars, bikes and boats you own or owned.',
     title: '{year} {make} {model}',
     parts: [
@@ -287,7 +287,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'property', label: 'Property & valuables', noun: 'item', group: 'things', sensitivity: 'sensitive', dated: true, publicable: false,
+    id: 'property', label: 'Property & valuables', noun: 'item', group: 'things', sensitivity: 'sensitive', dated: true, publicable: false, documents: 'warranty',
     description: 'Homes, land and valuables, with serial numbers for insurance.',
     title: '{name}',
     parts: [
@@ -300,7 +300,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'memberships', label: 'Memberships & loyalty', noun: 'membership', group: 'things', sensitivity: 'standard', dated: true, publicable: true,
+    id: 'memberships', label: 'Memberships & loyalty', noun: 'membership', group: 'things', sensitivity: 'standard', dated: true, publicable: true, documents: 'card',
     description: 'Frequent flyer, hotel and loyalty numbers, clubs, associations and subscriptions.',
     title: '{organization}',
     parts: [
@@ -324,7 +324,7 @@ const DEFS: Def[] = [
     ],
   },
   {
-    id: 'legal', label: 'Legal documents', noun: 'document', group: 'money', sensitivity: 'secret', dated: true, publicable: false,
+    id: 'legal', label: 'Legal documents', noun: 'document', group: 'money', sensitivity: 'secret', dated: true, publicable: false, documents: 'contract',
     description: 'Will, powers of attorney, trusts, beneficiary designations and where the originals are.',
     title: '{title}',
     parts: [
@@ -337,14 +337,13 @@ const DEFS: Def[] = [
   },
   {
     // Nothing required: a photo alone is a receipt worth keeping, and the details can come later (by hand or an assistant).
-    id: 'receipts', label: 'Receipts', noun: 'receipt', group: 'money', sensitivity: 'sensitive', dated: false, publicable: false, sortBy: 'purchased',
+    id: 'receipts', label: 'Receipts', noun: 'receipt', group: 'money', sensitivity: 'sensitive', dated: false, publicable: false, sortBy: 'purchased', documents: 'receipt',
     description: 'What you bought, where, when and for how much, with the photo or PDF. For taxes, returns, warranties and buying again.',
     title: '{merchant} · {total}',
     parts: [
       { key: 'merchant', label: 'Merchant', type: 'text' },
       { key: 'purchased', label: 'Purchase date', type: 'date' },
       { key: 'total', label: 'Total', type: 'money' },
-      { key: 'files', label: 'Photo or PDF', type: 'files' },
       { key: 'category', label: 'Category', type: 'enum', options: o('groceries', 'dining', 'household', 'clothing', 'electronics', 'health', 'transport', 'travel', 'home=Home & garden', 'entertainment', 'subscriptions', 'gifts', 'education', 'business', 'charity', 'other') },
       { key: 'items', label: 'Items', type: 'list', of: [
         { key: 'description', label: 'Item', type: 'text', required: true },
@@ -380,5 +379,5 @@ export const BUILT_IN_DOMAINS: DomainDef[] = DEFS.map((d) => ({ ...d, builtIn: t
 
 /** Paths under /api/v1 that domains may never use. */
 export const RESERVED = new Set([
-  'node', 'auth', 'owner', 'contacts', 'federation', 'public-profile', 'keys', 'audit', 'export', 'catalog', 'timeline', 'attention', 'records', 'files', 'domains', 'messages',
+  'node', 'auth', 'owner', 'contacts', 'federation', 'public-profile', 'keys', 'audit', 'export', 'catalog', 'timeline', 'attention', 'records', 'files', 'documents', 'shares', 'domains', 'messages',
 ]);

@@ -124,16 +124,33 @@ async function shrink(file: File): Promise<Blob> {
   } catch { return file; }
 }
 
-/** Upload one file to a domain; attach it by saving its id in a record's files part. */
-export async function uploadFile(domain: string, file: File): Promise<FileRef> {
+async function sendBytes<T>(url: string, file: File): Promise<T> {
   const body = await shrink(file);
   const type = body.type || file.type;
   const name = type === 'image/jpeg' && file.type !== 'image/jpeg' ? file.name.replace(/\.\w+$/, '') + '.jpg' : file.name;
-  const res = await fetch(`/api/v1/files?domain=${encodeURIComponent(domain)}&name=${encodeURIComponent(name)}`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': type }, body });
+  const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}name=${encodeURIComponent(name)}`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': type }, body });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(res.status, data?.code || 'error', data?.message || `Upload failed (${res.status})`);
-  return { id: data.id, name: data.name, type: data.type, size: data.size };
+  return data as T;
 }
+
+/** One file becomes a new document. With link it's filed on that entry; without, it lands in the inbox. */
+export function uploadDocument(file: File, opts: { link?: { domain: string; recordId: string }; kind?: string } = {}) {
+  const q = new URLSearchParams();
+  if (opts.link) q.set('link', `${opts.link.domain}:${opts.link.recordId}`);
+  if (opts.kind) q.set('kind', opts.kind);
+  return sendBytes<DocFull>(`/api/v1/documents?${q}`, file);
+}
+export const addPage = (docId: string, file: File) => sendBytes<DocFull>(`/api/v1/documents/${docId}/pages`, file);
+
+export type DocLink = { domain: string; recordId: string };
+export type DocRef = { id: string; title: string; kind: string; date: string | null; status: 'inbox' | 'filed'; pages: FileRef[]; links: DocLink[] };
+export type Suggestion = { id: string; domain: string; recordId: string | null; data: Record<string, unknown>; validFrom?: string | null; validTo?: string | null; note: string; by: { type: string; id: string }; at: string };
+export type DocFull = Omit<DocRef, 'links'> & {
+  links: (DocLink & { domainLabel: string; title: string | null })[];
+  text: string; notes: string; from: { type: string; id: string }; suggestions: Suggestion[]; createdAt: string; updatedAt: string;
+};
+export type Share = { id: string; expiresAt: string; revokedAt: string | null; views: number; lastViewedAt: string | null; createdAt: string; active: boolean };
 
 export async function copy(text: string) {
   try { await navigator.clipboard.writeText(text); return true; } catch { return false; }

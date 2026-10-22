@@ -16,8 +16,7 @@ export type PartType =
   | 'enum'      // one of options
   | 'last4'     // exactly four digits. Full card/account numbers are never stored.
   | 'contact'   // id of a record in contacts (supervisor, landlord, doctor…)
-  | 'list'      // rows of sub-parts (`of`), e.g. a receipt's line items
-  | 'files';    // attached photos or PDFs: [{ id, name, type, size }], uploaded through /api/v1/files
+  | 'list';     // rows of sub-parts (`of`), e.g. a receipt's line items
 
 export type PartDef = {
   key: string;
@@ -28,7 +27,7 @@ export type PartDef = {
   sensitivity?: Sensitivity;
   options?: [string, string][];
   hint?: string;
-  /** For list parts: what each row holds. Simple types only (no list, files or contact). */
+  /** For list parts: what each row holds. Simple types only (no list or contact). */
   of?: PartDef[];
   /** A date worth a heads-up before it passes (return by, warranty until). Shown on Home, then dropped two weeks after. */
   remind?: boolean;
@@ -53,6 +52,8 @@ export type DomainDef = {
   publicable: boolean;
   /** Newest-first order by this date part instead of when the record was added (receipts: purchase date). */
   sortBy?: string;
+  /** Entries take linked documents (scans, photos, PDFs); new ones get this kind, e.g. 'insurance_card'. */
+  documents?: string;
   builtIn: boolean;
   schemaVersion: number;
 };

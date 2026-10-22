@@ -15,6 +15,8 @@ import Contacts from './pages/admin/Contacts';
 import ContactDetail from './pages/admin/ContactDetail';
 import Messages from './pages/admin/Messages';
 import Receipts from './pages/admin/Receipts';
+import Documents from './pages/admin/Documents';
+import SharedDocument from './pages/SharedDocument';
 import PublicEditor from './pages/admin/PublicEditor';
 import Apps from './pages/admin/Apps';
 import Settings from './pages/admin/Settings';
@@ -36,6 +38,7 @@ export default function App() {
           <Route path="/claim" element={<Setup />} />
           <Route path="/login" element={<Login />} />
           <Route path="/connect" element={<Connect />} />
+          <Route path="/s/:token" element={<SharedDocument />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Home />} />
             <Route path="data" element={<Navigate to="/admin/life/profile" replace />} />
@@ -46,6 +49,8 @@ export default function App() {
             <Route path="life/receipts" element={<Navigate to="/admin/receipts" replace />} />
             <Route path="life/:domain" element={<Category />} />
             <Route path="receipts" element={<Receipts />} />
+            <Route path="documents" element={<Documents />} />
+            <Route path="documents/:id" element={<Documents />} />
             <Route path="contacts" element={<Contacts />} />
             <Route path="contacts/:id" element={<ContactDetail />} />
             <Route path="messages" element={<Messages />} />

@@ -222,6 +222,7 @@ function BackupsTab() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
           <button className="btn btn-primary" disabled={busy} onClick={async () => { if (await run(() => post('/api/v1/node/backups'), 'Backup complete')) { reload(); refresh(); } }}>Back up now</button>
           <button className="btn btn-secondary" onClick={exportAll}>Export everything (JSON)</button>
+          <a className="btn btn-secondary" href="/api/v1/export/documents" download>Download documents (.tar)</a>
         </div>
       </div>
       <div style={{ overflowX: 'auto' }}>

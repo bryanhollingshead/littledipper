@@ -1,5 +1,5 @@
 import { useMemo, useState, type DragEvent } from 'react';
-import { FILE_ACCEPT, get, post, saveFile, uploadFile, type FileRef } from '../../api';
+import { del, FILE_ACCEPT, get, post, saveFile, uploadDocument } from '../../api';
 import { ErrorNote, Loading, Pills, useAsync, useToast } from '../../ui';
 import { fetchCatalog, fmtDate, money, Mono, RecordEditor, useContactsLite, type Rec } from '../../life';
 
@@ -67,10 +67,13 @@ export default function Receipts() {
     setUploading(files.length);
     const made: Rec[] = [];
     for (const f of files) {
+      // The receipt first, then its photo filed on it. A failed upload takes the empty receipt with it.
+      const rec = await post<Rec>(`/api/v1/${DOMAIN}`, { data: { capturedVia: 'upload' } }).catch((e) => { toast(`${f.name}: ${(e as Error).message}`); return null; });
+      if (!rec) continue;
       try {
-        const ref: FileRef = await uploadFile(DOMAIN, f);
-        made.push(await post<Rec>(`/api/v1/${DOMAIN}`, { data: { files: [ref.id], capturedVia: 'upload' } }));
-      } catch (e) { toast(`${f.name}: ${(e as Error).message}`); }
+        const doc = await uploadDocument(f, { link: { domain: DOMAIN, recordId: rec.id } });
+        made.push({ ...rec, documents: [{ ...doc, links: [{ domain: DOMAIN, recordId: rec.id }] }] });
+      } catch (e) { toast(`${f.name}: ${(e as Error).message}`); await del(`/api/v1/${DOMAIN}/${rec.id}`).catch(() => {}); }
       setUploading((n) => n - 1);
     }
     reload();
@@ -172,16 +175,16 @@ export default function Receipts() {
 }
 
 function Row({ r, onOpen, catLabel }: { r: Rec; onOpen: () => void; catLabel?: [string, string][] }) {
-  const files = (r.data.files as FileRef[] | undefined) ?? [];
+  const files = r.documents ?? [];
   const items = (r.data.items as unknown[] | undefined)?.length ?? 0;
   const due = deadline(r);
   const cat = catLabel?.find(([k]) => k === r.data.category)?.[1];
-  const sub = [cat, items ? `${items} item${items === 1 ? '' : 's'}` : '', files.length ? `${files.length} file${files.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+  const sub = [cat, items ? `${items} item${items === 1 ? '' : 's'}` : '', files.length ? (files.length === 1 ? 'photo' : `${files.length} photos`) : ''].filter(Boolean).join(' · ');
   return (
     <button className="bare card receipt-row" onClick={onOpen} style={{ padding: '12px 18px', gap: 14 }}>
       <span className="text-muted" style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{r.data.purchased ? fmtDate(String(r.data.purchased)) : 'No date'}</span>
       <span style={{ minWidth: 0 }}>
-        <span style={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(r.data.merchant || (files[0]?.name ?? 'Receipt'))}</span>
+        <span style={{ display: 'block', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(r.data.merchant || (files[0]?.title ?? 'Receipt'))}</span>
         {sub && <span className="text-muted" style={{ display: 'block', fontSize: 12 }}>{sub}</span>}
       </span>
       <span className="receipt-tags">{due && <span className="tag tag-accent">{due.label} {fmtDate(due.date)}</span>}{needsDetails(r) && <span className="tag tag-neutral">Needs details</span>}</span>

@@ -3,7 +3,6 @@ import { ctx } from '../ctx.js';
 import { decrypt, encrypt, isEncrypted, newId } from '../crypto.js';
 import { bad } from '../auth.js';
 import { mask, storeValue, type FieldDoc, type Sensitivity } from '../fields.js';
-import { checkFiles } from '../files.js';
 import { BUILT_IN_DOMAINS, RESERVED } from './catalog.js';
 import type { DomainDef, PartDef, PartType, RecordDoc } from './types.js';
 
@@ -90,7 +89,6 @@ async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> 
     case 'enum': return p.options!.some(([k]) => k === v) ? v : fail(`must be one of ${p.options!.map(([k]) => k).join(', ')}`);
     case 'last4': return /^\d{4}$/.test(String(v)) ? String(v) : fail('only the last four digits, never the full number');
     case 'contact': return (await ctx.store.get('contacts', String(v))) ? String(v) : fail('no such contact');
-    case 'files': return checkFiles(p.label, v, cx.domain, cx.recordId);
     case 'list': {
       if (!Array.isArray(v)) fail('expected a list');
       if ((v as unknown[]).length > MAX_ROWS) fail(`up to ${MAX_ROWS} rows`);
@@ -168,7 +166,6 @@ export function displayValue(p: PartDef, v: unknown): string {
     case 'money': { const m = v as { amount: number; currency: string }; try { return new Intl.NumberFormat('en', { style: 'currency', currency: m.currency, maximumFractionDigits: Number.isInteger(m.amount) ? 0 : 2 }).format(m.amount); } catch { return `${m.amount} ${m.currency}`; } }
     case 'boolean': return v ? 'Yes' : 'No';
     case 'list': { const n = (v as unknown[]).length; return n ? `${n} ${n === 1 ? 'row' : 'rows'}` : ''; }
-    case 'files': { const n = (v as unknown[]).length; return n ? `${n} file${n === 1 ? '' : 's'}` : ''; }
     default: return String(v);
   }
 }

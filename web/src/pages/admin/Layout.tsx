@@ -10,12 +10,13 @@ type Admin = {
   setTech: (v: boolean) => void;
   pendingIn: number;
   unreadMessages: number;
+  inboxDocs: number;
   refresh: () => void;
 };
 const AdminCtx = createContext<Admin>(null as never);
 export const useAdmin = () => useContext(AdminCtx);
 
-const NAV: [string, string][] = [['/admin', 'Home'], ['/admin/life', 'My data'], ['/admin/lifestream', 'Lifestream'], ['/admin/receipts', 'Receipts'], ['/admin/contacts', 'Contacts'], ['/admin/messages', 'Messages'], ['/admin/public', 'Public profile'], ['/admin/apps', 'Apps and access'], ['/admin/settings', 'Settings']];
+const NAV: [string, string][] = [['/admin', 'Home'], ['/admin/life', 'My data'], ['/admin/documents', 'Documents'], ['/admin/lifestream', 'Lifestream'], ['/admin/receipts', 'Receipts'], ['/admin/contacts', 'Contacts'], ['/admin/messages', 'Messages'], ['/admin/public', 'Public profile'], ['/admin/apps', 'Apps and access'], ['/admin/settings', 'Settings']];
 const DOCS: [string, string][] = [['/admin/reference/model', 'Data model'], ['/admin/reference/endpoints', 'Endpoints']];
 
 const Badge = ({ n }: { n: number }) => (
@@ -30,17 +31,19 @@ export default function AdminLayout() {
   const [node, setNode] = useState<NodeInfo | null>(null);
   const [pendingIn, setPendingIn] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [inboxDocs, setInboxDocs] = useState(0);
   const [authError, setAuthError] = useState(false);
   const [n, setN] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const [o, nd, reqs, unread] = await Promise.all([get<Owner>('/api/v1/owner'), get<NodeInfo>('/api/v1/node'), get('/api/v1/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/v1/messages/unread')]);
+      const [o, nd, reqs, unread, docs] = await Promise.all([get<Owner>('/api/v1/owner'), get<NodeInfo>('/api/v1/node'), get('/api/v1/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/v1/messages/unread'), get<{ items: unknown[] }>('/api/v1/documents?status=inbox')]);
       setOwner(o);
       setNode(nd);
       // Stranger requests under "Anyone" wait quietly: no badge.
       setPendingIn(reqs.items.filter((r: { quiet: boolean }) => !r.quiet).length);
       setUnreadMessages(unread.count);
+      setInboxDocs(docs.items.length);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setAuthError(true);
     }
@@ -64,7 +67,7 @@ export default function AdminLayout() {
   const isOn = (to: string) => (to === '/admin' ? loc.pathname === '/admin' : loc.pathname.startsWith(to));
 
   return (
-    <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, refresh: () => setN((x) => x + 1) }}>
+    <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, refresh: () => setN((x) => x + 1) }}>
       <div className="shell">
         <aside className="sidebar" aria-label="Main">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 10px 4px', flex: 'none' }}>
@@ -81,6 +84,7 @@ export default function AdminLayout() {
               {label}
               {to === '/admin/contacts' && pendingIn > 0 && <Badge n={pendingIn} />}
               {to === '/admin/messages' && unreadMessages > 0 && <Badge n={unreadMessages} />}
+              {to === '/admin/documents' && inboxDocs > 0 && <Badge n={inboxDocs} />}
             </NavLink>
           ))}
           {tech && (
