@@ -88,7 +88,7 @@ export default function AdminLayout() {
             <span className="side-avatar" title={rail ? owner.displayName : undefined}>{initials(owner.displayName)}</span>
             <span className="side-name">{owner.displayName}</span>
             <button type="button" className="bare side-toggle" onClick={toggleRail} aria-expanded={!rail} aria-label={rail ? 'Expand sidebar' : 'Collapse sidebar'} title={rail ? 'Expand sidebar' : 'Collapse sidebar'}>
-              <Icon name="panel" size={18} />
+              <Icon name="collapse" size={18} />
             </button>
           </div>
           <div className="text-muted mono brand-addr" style={{ padding: '2px 10px 0 50px', fontSize: 11, overflowWrap: 'anywhere' }}>{addr(node.address)}</div>

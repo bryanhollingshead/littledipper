@@ -67,11 +67,8 @@ const PATHS: Record<string, ReactNode> = {
     <path {...N} d="M9 3v4M15 3v4M12 16v5" />
     <path {...F} d="M6.5 7h11v3.5a5.5 5.5 0 0 1-11 0z" />
   </>,
-  panel: <>
-    <rect {...N} x="3" y="4" width="18" height="16" rx="2.5" />
-    <path {...F} d="M5.5 4H9v16H5.5A2.5 2.5 0 0 1 3 17.5v-11A2.5 2.5 0 0 1 5.5 4z" />
-    <path {...N} d="M9 4v16M15.5 10l-2 2 2 2" />
-  </>,
+  /** Points left; the folded sidebar mirrors it to point right. */
+  collapse: <path {...N} d="M14.5 6 8.5 12l6 6" strokeWidth={2} />,
   signout: <>
     <path {...F} d="M5 4h8v16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
     <path {...N} d="M13 4h1.5a1 1 0 0 1 1 1v2M15.5 17v2a1 1 0 0 1-1 1H13M12 12h9M18.5 9.5 21 12l-2.5 2.5" />
