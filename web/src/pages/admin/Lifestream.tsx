@@ -6,8 +6,8 @@ import { duration, fetchCatalog, fmtRange, GROUPS, groupOf, Mono } from '../../l
 
 type Item = { domain: string; domainLabel: string; id: string; title: string; validFrom: string; validTo: string | null; current: boolean };
 
-/** Your life, in order: every dated record across every category. */
-export default function Timeline() {
+/** Lifestream: your life in order, every dated record across every category. */
+export default function Lifestream() {
   const { data, error } = useAsync(() => get<{ items: Item[] }>('/api/v1/timeline'), []);
   const { data: catalog } = useAsync(fetchCatalog, []);
   const [group, setGroup] = useState('all');
@@ -24,9 +24,8 @@ export default function Timeline() {
   const groupsPresent = GROUPS.filter((g) => data.items.some((i) => dom(i.domain)?.group === g.id));
 
   return (
-    <div data-screen-label="Timeline" style={{ maxWidth: 900 }}>
-      <Link className="btn btn-ghost" to="/admin/life" style={{ marginBottom: 14 }}>← My life</Link>
-      <h1>Your timeline</h1>
+    <div data-screen-label="Lifestream" style={{ maxWidth: 900 }}>
+      <h1>Lifestream</h1>
       <p className="text-muted" style={{ maxWidth: 620 }}>Every home, job, school and milestone with a date, newest first. Fill in the gaps and applications, background checks and your assistants get the full story.</p>
       {groupsPresent.length > 1 && <Pills value={group} options={[['all', 'Everything'], ...groupsPresent.map((g) => [g.id, g.label] as [string, string])]} onChange={setGroup} style={{ margin: '18px 0 8px' }} />}
 

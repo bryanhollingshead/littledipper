@@ -45,8 +45,8 @@ export default function LifeHub() {
               {core.filter((f) => f.key !== 'legal_name').map((f) => <span key={f.key} className="tag tag-neutral">{f.label}: {f.value || '—'}</span>)}
             </div>
           </Link>
-          <Link to="/admin/life/timeline" className="card" style={{ padding: '22px 24px', gap: 10, textDecoration: 'none', color: 'inherit', background: 'var(--color-accent-2-100)', position: 'relative', overflow: 'hidden' }}>
-            <div className="card-kicker" style={{ color: 'var(--color-accent-2-800)' }}>Your timeline</div>
+          <Link to="/admin/lifestream" className="card" style={{ padding: '22px 24px', gap: 10, textDecoration: 'none', color: 'inherit', background: 'var(--color-accent-2-100)', position: 'relative', overflow: 'hidden' }}>
+            <div className="card-kicker" style={{ color: 'var(--color-accent-2-800)' }}>Lifestream</div>
             <div className="card-title" style={{ fontSize: 22 }}>{timeline?.items.length ? `${timeline.items.length} moments${years ? ` across ${years} years` : ''}` : 'Your story starts here'}</div>
             <div className="card-body">Homes, jobs, schools and milestones, laid out in order. Background checks and applications ask for exactly this.</div>
             <TimelineSpark n={timeline?.items.length ?? 0} />

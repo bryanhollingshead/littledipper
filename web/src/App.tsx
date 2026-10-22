@@ -10,7 +10,7 @@ import Home from './pages/admin/Home';
 import MyData from './pages/admin/MyData';
 import LifeHub from './pages/admin/LifeHub';
 import Category from './pages/admin/Category';
-import Timeline from './pages/admin/Timeline';
+import Lifestream from './pages/admin/Lifestream';
 import Contacts from './pages/admin/Contacts';
 import ContactDetail from './pages/admin/ContactDetail';
 import Messages from './pages/admin/Messages';
@@ -41,7 +41,8 @@ export default function App() {
             <Route path="data" element={<Navigate to="/admin/life/profile" replace />} />
             <Route path="life" element={<LifeHub />} />
             <Route path="life/profile" element={<MyData />} />
-            <Route path="life/timeline" element={<Timeline />} />
+            <Route path="life/timeline" element={<Navigate to="/admin/lifestream" replace />} />
+            <Route path="lifestream" element={<Lifestream />} />
             <Route path="life/receipts" element={<Navigate to="/admin/receipts" replace />} />
             <Route path="life/:domain" element={<Category />} />
             <Route path="receipts" element={<Receipts />} />
