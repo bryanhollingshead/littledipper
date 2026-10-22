@@ -14,6 +14,7 @@ import Timeline from './pages/admin/Timeline';
 import Contacts from './pages/admin/Contacts';
 import ContactDetail from './pages/admin/ContactDetail';
 import Messages from './pages/admin/Messages';
+import Receipts from './pages/admin/Receipts';
 import PublicEditor from './pages/admin/PublicEditor';
 import Apps from './pages/admin/Apps';
 import Settings from './pages/admin/Settings';
@@ -41,7 +42,9 @@ export default function App() {
             <Route path="life" element={<LifeHub />} />
             <Route path="life/profile" element={<MyData />} />
             <Route path="life/timeline" element={<Timeline />} />
+            <Route path="life/receipts" element={<Navigate to="/admin/receipts" replace />} />
             <Route path="life/:domain" element={<Category />} />
+            <Route path="receipts" element={<Receipts />} />
             <Route path="contacts" element={<Contacts />} />
             <Route path="contacts/:id" element={<ContactDetail />} />
             <Route path="messages" element={<Messages />} />

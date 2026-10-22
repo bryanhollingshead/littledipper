@@ -335,6 +335,34 @@ const DEFS: Def[] = [
       { key: 'parties', label: 'People named', type: 'longtext' },
     ],
   },
+  {
+    // Nothing required: a photo alone is a receipt worth keeping, and the details can come later (by hand or an assistant).
+    id: 'receipts', label: 'Receipts', noun: 'receipt', group: 'money', sensitivity: 'sensitive', dated: false, publicable: false, sortBy: 'purchased',
+    description: 'What you bought, where, when and for how much, with the photo or PDF. For taxes, returns, warranties and buying again.',
+    title: '{merchant} · {total}',
+    parts: [
+      { key: 'merchant', label: 'Merchant', type: 'text' },
+      { key: 'purchased', label: 'Purchase date', type: 'date' },
+      { key: 'total', label: 'Total', type: 'money' },
+      { key: 'files', label: 'Photo or PDF', type: 'files' },
+      { key: 'category', label: 'Category', type: 'enum', options: o('groceries', 'dining', 'household', 'clothing', 'electronics', 'health', 'transport', 'travel', 'home=Home & garden', 'entertainment', 'subscriptions', 'gifts', 'education', 'business', 'charity', 'other') },
+      { key: 'items', label: 'Items', type: 'list', of: [
+        { key: 'description', label: 'Item', type: 'text', required: true },
+        { key: 'quantity', label: 'Qty', type: 'number' },
+        { key: 'price', label: 'Price', type: 'money' },
+        { key: 'sku', label: 'Product code', type: 'text' },
+      ] },
+      { key: 'subtotal', label: 'Subtotal', type: 'money' },
+      { key: 'tax', label: 'Tax', type: 'money' },
+      { key: 'paymentMethod', label: 'Paid with', type: 'enum', options: o('card', 'cash', 'bank_transfer=Bank transfer', 'mobile_wallet=Mobile wallet', 'crypto=Crypto / stablecoin', 'gift_card=Gift card', 'other') },
+      { key: 'cardLast4', label: 'Card last four', type: 'last4' },
+      { key: 'orderNumber', label: 'Order or receipt number', type: 'text' },
+      { key: 'returnBy', label: 'Return by', type: 'date', remind: true },
+      { key: 'warrantyUntil', label: 'Warranty until', type: 'date', remind: true },
+      { key: 'merchantUrl', label: 'Merchant website', type: 'url' },
+      { key: 'capturedVia', label: 'How it got here', type: 'enum', options: o('manual=Typed in', 'upload=Uploaded', 'email=Forwarded email', 'assistant=Read by an assistant', 'merchant=Sent by the merchant') },
+    ],
+  },
   // ── personal ─────────────────────────────────────────────────────────
   {
     id: 'preferences', label: 'Preferences', noun: 'preference', group: 'personal', sensitivity: 'standard', dated: false, publicable: true,

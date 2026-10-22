@@ -15,7 +15,7 @@ type Admin = {
 const AdminCtx = createContext<Admin>(null as never);
 export const useAdmin = () => useContext(AdminCtx);
 
-const NAV: [string, string][] = [['/admin', 'Home'], ['/admin/life', 'My life'], ['/admin/contacts', 'Contacts'], ['/admin/messages', 'Messages'], ['/admin/public', 'Public profile'], ['/admin/apps', 'Apps and access'], ['/admin/settings', 'Settings']];
+const NAV: [string, string][] = [['/admin', 'Home'], ['/admin/life', 'My life'], ['/admin/receipts', 'Receipts'], ['/admin/contacts', 'Contacts'], ['/admin/messages', 'Messages'], ['/admin/public', 'Public profile'], ['/admin/apps', 'Apps and access'], ['/admin/settings', 'Settings']];
 const DOCS: [string, string][] = [['/admin/reference/model', 'Data model'], ['/admin/reference/endpoints', 'Endpoints']];
 
 const Badge = ({ n }: { n: number }) => (

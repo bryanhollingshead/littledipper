@@ -20,14 +20,14 @@ export default function Home() {
   const { data: reqs } = useAsync(() => get('/api/v1/federation/requests?status=pending&direction=in'), []);
   const { data: audit, reload } = useAsync(() => get<{ items: AuditEvent[] }>('/api/v1/audit?limit=6'), []);
   const { data: catalog } = useAsync(fetchCatalog, []);
-  const { data: attention } = useAsync(() => get<{ items: { domain: string; id: string; title: string; part: string; date: string; expired: boolean }[] }>('/api/v1/attention?days=90'), []);
+  const { data: attention } = useAsync(() => get<{ items: { domain: string; id: string; title: string; part: string; kind?: 'expiry' | 'deadline'; date: string; expired: boolean }[] }>('/api/v1/attention?days=90'), []);
 
   const inbox = [
     ...(reqs?.items || []).filter((r: { quiet: boolean }) => !r.quiet).map((r: { _id: string; contactId: string; fromNode: string; peerName: string }) => ({
       key: r._id, initials: initials(r.peerName), title: `${r.peerName} wants to connect`, sub: r.fromNode, cta: 'Review', go: () => nav(`/admin/contacts/${r.contactId}`),
     })),
     ...(attention?.items || []).slice(0, 3).map((a) => ({
-      key: a.id + a.part, initials: initials(catalog?.find((d) => d.id === a.domain)?.label.replace('&', '') || a.domain), title: `${a.title} ${a.expired ? 'has expired' : 'expires soon'}`, sub: `${a.part} ${fmtDate(a.date)}`, cta: 'Open', go: () => nav(`/admin/life/${a.domain}`),
+      key: a.id + a.part, initials: initials(catalog?.find((d) => d.id === a.domain)?.label.replace('&', '') || a.domain), title: a.kind === 'deadline' ? `${a.part}: ${a.title}` : `${a.title} ${a.expired ? 'has expired' : 'expires soon'}`, sub: a.kind === 'deadline' && a.expired ? `Passed ${fmtDate(a.date)}` : `${a.part} ${fmtDate(a.date)}`, cta: 'Open', go: () => nav(`/admin/life/${a.domain}`),
     })),
     ...(node.update.available ? [{ key: 'update', initials: '↑', title: `Update ${node.update.latest} is ready`, sub: 'Release notes in Settings', cta: 'View', go: () => nav('/admin/settings/hosting') }] : []),
   ];

@@ -238,6 +238,54 @@ async function main() {
     detB = await b.call('GET', `/api/v1/contacts/${cB.id}`);
     ok(detB.sharedDomains.some((d: any) => d.domain === 'education' && d.records.length === 1), 'grant + edit nudge B to sync without asking');
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { education: false } });
+    console.log('receipts');
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+    const cookieOf = (c: Client) => [...c.jar].map(([k, v]) => `${k}=${v}`).join('; ');
+    const upload = (bytes: Buffer, type: string, domain = 'receipts', headers: Record<string, string> = { cookie: cookieOf(a) }) =>
+      fetch(`${a.base}/api/v1/files?domain=${domain}&name=receipt.png`, { method: 'POST', headers: { origin: a.base, 'content-type': type, ...headers }, body: bytes });
+    const up1 = await upload(png, 'image/png');
+    const file1 = await up1.json();
+    ok(up1.status === 201 && file1.id.startsWith('fil_') && file1.size === png.length, 'upload a receipt photo');
+    ok((await upload(Buffer.from('not really a png'), 'image/png')).status === 400, 'contents must match the declared type');
+    ok((await upload(Buffer.from('hello'), 'text/plain')).status === 415, 'only photos and PDFs are accepted');
+    ok((await upload(png, 'image/png', 'employment')).status === 400, "categories without files don't take uploads");
+    const soon = new Date(Date.now() + 10 * 86400_000).toISOString().slice(0, 10);
+    const rc1 = await a.call('POST', '/api/v1/receipts', { data: {
+      merchant: 'Blue Bottle', purchased: '2026-10-01', total: { amount: 12.5, currency: 'USD' }, files: [file1.id], returnBy: soon,
+      items: [{ description: 'Latte', quantity: 2, price: { amount: 5, currency: 'USD' } }, { description: '', quantity: '' }, { description: 'Scone', price: { amount: 2.5, currency: 'USD' } }],
+    } });
+    ok(rc1.title === 'Blue Bottle · $12.50' && rc1.data.items.length === 2 && rc1.data.files[0].name === 'receipt.png', 'receipt with line items and a photo (blank rows dropped)');
+    const got = await fetch(`${a.base}/api/v1/files/${file1.id}`, { headers: { cookie: cookieOf(a) } });
+    ok(got.status === 200 && got.headers.get('content-type') === 'image/png' && Buffer.from(await got.arrayBuffer()).equals(png), 'the photo comes back byte for byte');
+    await a.call('POST', '/api/v1/receipts', { data: { merchant: 'Elsewhere', files: [file1.id] } }, [400]);
+    ok(true, "a file can't be attached to two receipts");
+    await a.call('POST', '/api/v1/receipts', { data: { items: [{ quantity: 1 }] } }, [400]);
+    ok(true, 'line items need a description');
+    // An assistant with receipts:write: upload a photo, file it, fill the details in later.
+    const helper = await a.call('POST', '/api/v1/keys', { name: 'Receipt reader', scopes: ['receipts:read', 'receipts:write'] });
+    const asHelper = { authorization: `Bearer ${helper.secret}` };
+    const file2 = await (await upload(png, 'image/png', 'receipts', asHelper)).json();
+    const rc2 = await (await fetch(`${a.base}/api/v1/receipts`, { method: 'POST', headers: { ...asHelper, 'content-type': 'application/json' }, body: JSON.stringify({ data: { files: [file2.id], capturedVia: 'assistant' } }) })).json();
+    ok(rc2.title === 'receipt' && !rc2.data.merchant, 'a photo alone is a receipt (needs details)');
+    const filled = await (await fetch(`${a.base}/api/v1/receipts/${rc2.id}`, { method: 'PATCH', headers: { ...asHelper, 'content-type': 'application/json' }, body: JSON.stringify({ data: { merchant: 'Hardware Co', purchased: '2026-10-15', total: { amount: 89.99, currency: 'USD' }, warrantyUntil: '2028-10-15' } }) })).json();
+    ok(filled.title === 'Hardware Co · $89.99' && filled.data.files.length === 1, 'the assistant key fills in the details');
+    ok((await fetch(`${a.base}/api/v1/files/${file1.id}`, auth)).status === 403, 'a key without receipts scope cannot open receipt files');
+    const list = (await a.call('GET', '/api/v1/receipts')).items;
+    ok(list[0].id === rc2.id && list[1].id === rc1.id, 'receipts are ordered by purchase date');
+    const att = (await a.call('GET', '/api/v1/attention?days=30')).items;
+    ok(att.some((x: any) => x.id === rc1.id && x.part === 'Return by' && x.kind === 'deadline'), 'return-by date shows on Home');
+    // Sharing receipts: line items go, file ids don't.
+    await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { receipts: { scope: 'all' } } });
+    const shared = (await b.call('GET', `/api/v1/contacts/${cB.id}?sync=1`)).sharedDomains.find((d: any) => d.domain === 'receipts');
+    ok(shared?.records.length === 2 && shared.records.every((r: any) => !('files' in r.data)) && shared.records.some((r: any) => r.data.items?.length === 2), 'shared receipts carry items, not file ids');
+    await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { receipts: false } });
+    // Dropping a file from a receipt deletes it; deleting the receipt deletes the rest.
+    await a.call('PATCH', `/api/v1/receipts/${rc2.id}`, { data: { files: null } });
+    ok((await fetch(`${a.base}/api/v1/files/${file2.id}`, { headers: { cookie: cookieOf(a) } })).status === 404, 'removing a photo from a receipt deletes the file');
+    await a.call('DELETE', `/api/v1/receipts/${rc1.id}`);
+    ok((await fetch(`${a.base}/api/v1/files/${file1.id}`, { headers: { cookie: cookieOf(a) } })).status === 404, 'deleting a receipt deletes its photo');
+    const loose = await (await upload(png, 'image/png')).json();
+    ok((await a.call('DELETE', `/api/v1/files/${loose.id}`)).deleted, 'an upload never saved on a receipt can be deleted');
     console.log('messaging');
     const wk = await (await fetch(a.base + '/.well-known/little-dipper')).json();
     ok(wk.kind === 'node' && wk.capabilities?.includes('messages'), 'descriptor advertises the messages capability');

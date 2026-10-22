@@ -3,6 +3,7 @@ import { ctx } from '../ctx.js';
 import { decrypt, encrypt, isEncrypted, newId } from '../crypto.js';
 import { bad } from '../auth.js';
 import { mask, storeValue, type FieldDoc, type Sensitivity } from '../fields.js';
+import { checkFiles } from '../files.js';
 import { BUILT_IN_DOMAINS, RESERVED } from './catalog.js';
 import type { DomainDef, PartDef, PartType, RecordDoc } from './types.js';
 
@@ -55,7 +56,10 @@ const DATE = /^\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?)?$/;
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 export const isPartialDate = (v: unknown) => typeof v === 'string' && DATE.test(v);
 
-async function checkPart(p: PartDef, v: unknown): Promise<unknown> {
+type PartCtx = { domain: string; recordId: string | null };
+const MAX_ROWS = 200;
+
+async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> {
   const fail = (why: string) => { throw bad('invalid_value', `${p.label}: ${why}`); };
   switch (p.type) {
     case 'text': case 'longtext': {
@@ -74,6 +78,7 @@ async function checkPart(p: PartDef, v: unknown): Promise<unknown> {
     case 'currency': { const s = String(v).toUpperCase(); return /^[A-Z]{3}$/.test(s) ? s : fail('use a three-letter currency code, e.g. USD'); }
     case 'money': {
       const m = v as { amount?: unknown; currency?: unknown };
+      if (m?.amount === '' || m?.amount === null || m?.amount === undefined) fail('amount must be a number');
       const amount = Number(m?.amount);
       const currency = String(m?.currency || 'USD').toUpperCase();
       if (!Number.isFinite(amount)) fail('amount must be a number');
@@ -85,6 +90,25 @@ async function checkPart(p: PartDef, v: unknown): Promise<unknown> {
     case 'enum': return p.options!.some(([k]) => k === v) ? v : fail(`must be one of ${p.options!.map(([k]) => k).join(', ')}`);
     case 'last4': return /^\d{4}$/.test(String(v)) ? String(v) : fail('only the last four digits, never the full number');
     case 'contact': return (await ctx.store.get('contacts', String(v))) ? String(v) : fail('no such contact');
+    case 'files': return checkFiles(p.label, v, cx.domain, cx.recordId);
+    case 'list': {
+      if (!Array.isArray(v)) fail('expected a list');
+      if ((v as unknown[]).length > MAX_ROWS) fail(`up to ${MAX_ROWS} rows`);
+      const rows: Record<string, unknown>[] = [];
+      for (const raw of v as unknown[]) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('each row must be an object');
+        const r = raw as Record<string, unknown>;
+        const extra = Object.keys(r).filter((k) => !p.of!.some((s) => s.key === k));
+        if (extra.length) fail(`rows have no ${extra.join(', ')}`);
+        const row: Record<string, unknown> = {};
+        for (const s of p.of!) if (!empty(r[s.key]) && !(s.type === 'money' && empty((r[s.key] as { amount?: unknown })?.amount))) row[s.key] = await checkPart(s, r[s.key], cx);
+        if (!Object.keys(row).length) continue; // a blank row from the table editor
+        const missing = p.of!.filter((s) => s.required && empty(row[s.key]));
+        if (missing.length) fail(`each row needs ${missing.map((s) => s.label.toLowerCase()).join(', ')}`);
+        rows.push(row);
+      }
+      return rows;
+    }
   }
 }
 
@@ -105,7 +129,8 @@ export async function buildRecord(d: DomainDef, input: RecordInput, existing: Re
     if (!(p.key in inData)) continue;
     const v = inData[p.key];
     if (empty(v)) { delete data[p.key]; continue; }
-    const clean = await checkPart(p, v);
+    const clean = await checkPart(p, v, { domain: d.id, recordId: existing?._id ?? null });
+    if (Array.isArray(clean) && !clean.length) { delete data[p.key]; continue; }
     data[p.key] = partSens(d, p) === 'secret' ? encrypt(ctx.keys.masterKey, JSON.stringify(clean)) : clean;
   }
   const missing = d.parts.filter((p) => p.required && empty(data[p.key]));
@@ -140,8 +165,10 @@ export function displayValue(p: PartDef, v: unknown): string {
   switch (p.type) {
     case 'enum': return p.options?.find(([k]) => k === v)?.[1] ?? String(v);
     case 'country': return countryName(String(v));
-    case 'money': { const m = v as { amount: number; currency: string }; try { return new Intl.NumberFormat('en', { style: 'currency', currency: m.currency, maximumFractionDigits: 0 }).format(m.amount); } catch { return `${m.amount} ${m.currency}`; } }
+    case 'money': { const m = v as { amount: number; currency: string }; try { return new Intl.NumberFormat('en', { style: 'currency', currency: m.currency, maximumFractionDigits: Number.isInteger(m.amount) ? 0 : 2 }).format(m.amount); } catch { return `${m.amount} ${m.currency}`; } }
     case 'boolean': return v ? 'Yes' : 'No';
+    case 'list': { const n = (v as unknown[]).length; return n ? `${n} ${n === 1 ? 'row' : 'rows'}` : ''; }
+    case 'files': { const n = (v as unknown[]).length; return n ? `${n} file${n === 1 ? '' : 's'}` : ''; }
     default: return String(v);
   }
 }
@@ -178,7 +205,14 @@ export function recordOut(d: DomainDef, r: RecordDoc, opts: { reveal?: boolean }
 
 /** Newest first; current records ahead of ended ones. */
 export function sortRecords(d: DomainDef, recs: RecordDoc[]) {
+  const by = d.sortBy;
   return recs.sort((a, b) => {
+    if (by) {
+      // Undated entries last; plain values only (a sortBy part is never secret).
+      const x = String(a.data[by] ?? ''), y = String(b.data[by] ?? '');
+      if (x !== y) return !x ? 1 : !y ? -1 : y.localeCompare(x);
+      return b.createdAt.localeCompare(a.createdAt);
+    }
     if (d.dated) {
       const ca = isCurrent(d, a) ? 1 : 0, cb = isCurrent(d, b) ? 1 : 0;
       if (ca !== cb) return cb - ca;

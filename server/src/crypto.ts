@@ -89,6 +89,20 @@ export function decrypt(keyB64: string, blob: string): string {
   return Buffer.concat([decipher.update(Buffer.from(ctB, 'base64')), decipher.final()]).toString('utf8');
 }
 
+/** Same cipher for file contents: iv (12) | tag (16) | ciphertext, as raw bytes. */
+export function encryptBytes(keyB64: string, data: Buffer): Buffer {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(keyB64, 'base64'), iv);
+  const ct = Buffer.concat([cipher.update(data), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), ct]);
+}
+
+export function decryptBytes(keyB64: string, blob: Buffer): Buffer {
+  const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(keyB64, 'base64'), blob.subarray(0, 12));
+  decipher.setAuthTag(blob.subarray(12, 28));
+  return Buffer.concat([decipher.update(blob.subarray(28)), decipher.final()]);
+}
+
 export const isEncrypted = (v: unknown): v is string => typeof v === 'string' && v.startsWith('enc:v1:');
 
 /** Passphrase-based encryption (recovery kit). scrypt → AES-256-GCM. */

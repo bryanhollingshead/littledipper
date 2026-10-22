@@ -7,7 +7,7 @@ import { useAdmin } from './Layout';
 type CatalogDomain = {
   id: string; label: string; group: string; description: string; sensitivity: Sensitivity; dated: boolean; builtIn: boolean; count: number;
   feeds: string[]; scopes: { read: string; write: string }; schemaVersion: number;
-  parts: { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][] }[];
+  parts: { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; of?: { key: string; type: string }[] }[];
 };
 const useCatalog = () => useAsync(() => get<{ domains: CatalogDomain[] }>('/api/v1/catalog'), []).data?.domains;
 
@@ -52,7 +52,7 @@ export function DataModel() {
                     <tr key={p.key}>
                       <td className="mono" style={{ whiteSpace: 'nowrap' }}>{p.key}{p.required ? ' *' : ''}</td>
                       <td>{p.label}</td>
-                      <td className="mono text-muted" style={{ whiteSpace: 'nowrap' }}>{p.type}{p.options ? `(${p.options.length})` : ''}</td>
+                      <td className="mono text-muted" style={{ whiteSpace: 'nowrap' }}>{p.type}{p.options ? `(${p.options.length})` : ''}{p.of ? ` of { ${p.of.map((c) => `${c.key}: ${c.type}`).join(', ')} }` : ''}</td>
                       <td>{p.sensitivity === 'secret' && <span className="tag tag-accent">Secret</span>}</td>
                     </tr>
                   ))}

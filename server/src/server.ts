@@ -7,6 +7,7 @@ import { buildApp } from './app.js';
 import { scheduleBackups } from './backups.js';
 import { announceAddress } from './routes/node.js';
 import { startOutbox } from './messages.js';
+import { startFileSweeper } from './files.js';
 
 async function main() {
   ctx.store = await openStore(config);
@@ -20,6 +21,7 @@ async function main() {
   say(`Answering at ${config.hostUrl}`);
   scheduleBackups(say);
   startOutbox();
+  startFileSweeper();
 
   if (moved) {
     // The host address changed between boots: tell every connection.

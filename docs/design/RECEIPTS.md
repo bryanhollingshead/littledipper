@@ -1,6 +1,24 @@
 # Receipts
 
-> **Status: requirements agreed, not designed or built.** Recorded 2026-10-21. Build after the documents module ([DATA-ENTRY.md](DATA-ENTRY.md#documents-module)).
+> **Status: first version built** on branch `receipts` (2026-10-22). Built ahead of the documents module at the owner's request; its file storage is the groundwork that module will grow from.
+
+## Built (first version)
+
+- **The `receipts` domain** (Money group): `/api/v1/receipts`, `receipts:read` and `receipts:write` scopes, contact grants. **No part is required:** a photo alone is a receipt, and the details can be filled in later by hand or by an assistant.
+- **Two new part types in the domain engine,** available to any built-in domain:
+  - `list`: rows of sub-parts. Receipts use it for line items (item, quantity, price, product code). Up to 200 rows; blank rows are dropped.
+  - `files`: attached photos or PDFs, stored as `[{ id, name, type, size }]`.
+- **Files** (`/api/v1/files`): upload the raw bytes first, then put the id in a record. JPEG, PNG, WebP, GIF, HEIC and PDF, up to 10 MB, and the contents must match the declared type. Files are encrypted with the master key and kept apart from documents (`data/blobs/`, or a Mongo `blobs` collection). A file belongs to one domain, whose scopes guard it, and to one record. Removing it from the record, or deleting the record, deletes it. Uploads never saved on a record are removed after 24 hours. Contacts a receipt is shared with get the details and line items, but not the files (yet).
+- **Return-by and warranty-until** are `remind` dates: they appear on Home and in My life's "Coming up", then drop off two weeks after they pass.
+- **Receipts page** (`/admin/receipts`, in the sidebar): upload or drag and drop several at once (each becomes a receipt; one opens straight in the editor), a "needs details" list, filters by year, search, spending by year and by category (totals kept per currency), and a CSV download for an accountant. Large photos are shrunk to 2000px in the browser before upload.
+- **Ready for assistants:** an app key with `receipts:read` and `receipts:write` can upload a photo, create the receipt and fill in the details, with `capturedVia: "assistant"`. How AIs are invited is still question 7.
+
+### Not yet
+
+- Files aren't in nightly backups or the JSON export. Backups would grow by every photo, every night, for 30 days, so this needs its own design (incremental, or a separate files archive).
+- Date-range grants (question 9).
+- Linking a receipt to a financial account, or to an item in Property & valuables.
+- Email forwarding, extraction and merchant delivery (below).
 
 ## Why owners keep receipts
 
@@ -27,7 +45,7 @@
 | Total, subtotal, tax | Money with currency |
 | Payment method | Type and card last 4 digits only |
 | Order or receipt number | |
-| Line items | Description, quantity, price, product code. Needed for buying again. **Open:** domains only support flat fields today, so this needs a list or table field type. |
+| Line items | Description, quantity, price, product code. Needed for buying again. Built with the new `list` part type. |
 | Category | Free text or a short list, for taxes |
 | Return by, warranty until | Dates |
 | File | Photo or PDF (documents module) |
@@ -38,11 +56,17 @@
 1. **Table entry and upload** (first). Type receipts in the table view, or upload a photo or PDF and fill in the details.
 2. **Forwarding email receipts.** Forward to an address that feeds your node. Needs incoming email, see [MESSAGING-AND-EMAIL.md](MESSAGING-AND-EMAIL.md).
 3. **Extraction.** Pull the details out of photos and emails automatically. Deferred with the rest of AI-assisted entry (question 7).
-4. **Merchants sending receipts directly** (much later). A company could push receipts to a node with an app key the owner issues, limited to `receipts:write`, ideally landing as drafts.
+4. **Merchants sending receipts directly** (much later). A merchant is a verified organization contact running a messaging **service** ([MESSAGING-AND-EMAIL.md](MESSAGING-AND-EMAIL.md)). It sends a signed message of kind `receipt`; the owner's node files it as a receipt with `capturedVia: "merchant"`. The owner can turn this on per merchant, and disconnecting stops it. An app key limited to `receipts:write` is the simpler stopgap.
+
+## Later: invoices and payments (seeds only)
+
+The owner wants companies to be able to send **invoices**, and to pay them from an embedded **stablecoin wallet** or **bank account**. Not designed. What's already in place, so it can grow without breaking changes:
+- Organizations reach people as verified contacts over the messaging service, and message `kind` is an open set, so `invoice` and `payment_receipt` can be added as new kinds.
+- A paid invoice naturally becomes a receipt; `paymentMethod` already includes `crypto` (Crypto / stablecoin).
+- See question 11 for what needs deciding: custody, regulation, which rails, and how a payment is confirmed.
 
 ## Open
 
-- Line items: add a list or table field type to the domain engine, or store them another way.
 - Sharing receipts for a date range (for example "last tax year" with an accountant). "Current only" grants don't make sense for receipts.
 - Incentive sharing with companies: how a company asks, what it gets (selected fields, aggregate totals?), how long access lasts, and how it's revoked. Probably the same model as AI contacts (question 7).
 - Volume: hundreds of receipts a year, each with a file, affects storage, backup size and table performance.

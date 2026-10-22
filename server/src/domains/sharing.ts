@@ -34,6 +34,8 @@ export async function sharedDomainOut(contactId: string, domainId: string): Prom
     const data: Record<string, unknown> = {};
     for (const p of d.parts) {
       if (hidden.has(p.key) || plain[p.key] === undefined) continue;
+      // Contacts can't open the owner's files yet, so don't hand them ids they can't use.
+      if (p.type === 'files') continue;
       // A contact link becomes the person's name: their record ids mean nothing elsewhere.
       const value = p.type === 'contact' ? await nameOf(String(plain[p.key])) : displayValue(p, plain[p.key]);
       if (!value) continue;

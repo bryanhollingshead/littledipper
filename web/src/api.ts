@@ -105,6 +105,36 @@ export function saveFile(name: string, content: string, type = 'application/json
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ── files ──────────────────────────────────────────────────────────────
+export type FileRef = { id: string; name: string; type: string; size: number };
+export const fileUrl = (id: string) => `/api/v1/files/${id}`;
+export const FILE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf';
+
+/** Phone photos are 3–8 MB; a receipt reads fine at 2000px. Anything the browser can't draw goes up as-is. */
+async function shrink(file: File): Promise<Blob> {
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 1_500_000) return file;
+  try {
+    const img = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const out = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.85));
+    return out && out.size < file.size ? out : file;
+  } catch { return file; }
+}
+
+/** Upload one file to a domain; attach it by saving its id in a record's files part. */
+export async function uploadFile(domain: string, file: File): Promise<FileRef> {
+  const body = await shrink(file);
+  const type = body.type || file.type;
+  const name = type === 'image/jpeg' && file.type !== 'image/jpeg' ? file.name.replace(/\.\w+$/, '') + '.jpg' : file.name;
+  const res = await fetch(`/api/v1/files?domain=${encodeURIComponent(domain)}&name=${encodeURIComponent(name)}`, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': type }, body });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, data?.code || 'error', data?.message || `Upload failed (${res.status})`);
+  return { id: data.id, name: data.name, type: data.type, size: data.size };
+}
+
 export async function copy(text: string) {
   try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
 }

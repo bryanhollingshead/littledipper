@@ -1,10 +1,10 @@
 /** Shared pieces for the "My life" area: catalog types, group styling, dates, and the schema-driven record editor. */
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { del, get, patch, post, type Sensitivity } from './api';
+import { bytes, del, FILE_ACCEPT, fileUrl, get, patch, post, uploadFile, type FileRef, type Sensitivity } from './api';
 import { Confirm, Pills, Toggle, useAction, type ConfirmCfg } from './ui';
 
 // ── types ──────────────────────────────────────────────────────────────
-export type Part = { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string };
+export type Part = { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean };
 export type Domain = {
   id: string; label: string; noun: string; group: string; description: string; sensitivity: Sensitivity; dated: boolean; builtIn: boolean;
   parts: Part[]; title: string; count: number; currentCount: number; preview: string[]; sharedWith: number; feeds: string[];
@@ -87,13 +87,20 @@ export function countries(): [string, string][] {
 }
 export const countryName = (code: string) => countries().find(([c]) => c === code)?.[1] ?? code;
 
+/** Whole amounts without cents; receipts keep theirs. */
+export function money(m: { amount: number; currency: string }) {
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: m.currency, maximumFractionDigits: Number.isInteger(m.amount) ? 0 : 2 }).format(m.amount); } catch { return `${m.amount} ${m.currency}`; }
+}
+
 /** Human value for display. */
 export function show(p: Part, v: unknown, contacts: ContactLite[]): string {
   if (v === undefined || v === null || v === '') return '';
   switch (p.type) {
     case 'enum': return p.options?.find(([k]) => k === v)?.[1] ?? String(v);
     case 'country': return countryName(String(v));
-    case 'money': { const m = v as { amount: number; currency: string }; try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: m.currency, maximumFractionDigits: 0 }).format(m.amount); } catch { return `${m.amount} ${m.currency}`; } }
+    case 'money': return money(v as { amount: number; currency: string });
+    case 'list': { const n = (v as unknown[]).length; return n ? `${n} ${n === 1 ? 'row' : 'rows'}` : ''; }
+    case 'files': { const n = (v as unknown[]).length; return n ? `${n} file${n === 1 ? '' : 's'}` : ''; }
     case 'boolean': return v ? 'Yes' : 'No';
     case 'date': return fmtDate(String(v));
     case 'contact': return contacts.find((c) => c.id === v)?.displayName ?? 'Removed contact';
@@ -127,7 +134,7 @@ export function PartialDate({ value, onChange, id }: { value: string; onChange: 
   );
 }
 
-function PartInput({ p, value, onChange, contacts, hiddenSaved }: { p: Part; value: unknown; onChange: (v: unknown) => void; contacts: ContactLite[]; hiddenSaved: boolean }) {
+function PartInput({ p, value, onChange, contacts, hiddenSaved, domain, currency }: { p: Part; value: unknown; onChange: (v: unknown) => void; contacts: ContactLite[]; hiddenSaved: boolean; domain: string; currency: string }) {
   const id = `part-${p.key}`;
   const ph = hiddenSaved ? 'Saved and hidden · type to replace' : p.hint || '';
   switch (p.type) {
@@ -154,6 +161,10 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved }: { p: Part; val
         </div>
       );
     }
+    case 'files':
+      return <FilesInput domain={domain} value={(value as FileRef[] | undefined) ?? []} onChange={onChange} />;
+    case 'list':
+      return <ListInput p={p} value={(value as Row[] | undefined) ?? []} onChange={onChange} currency={currency} />;
     case 'last4':
       return <input id={id} className="input mono" inputMode="numeric" maxLength={4} placeholder={hiddenSaved ? '••••' : 'Last 4 digits only'} value={String(value ?? '')} onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))} style={{ maxWidth: 160, letterSpacing: '.2em' }} />;
     case 'number':
@@ -163,13 +174,109 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved }: { p: Part; val
   }
 }
 
+// ── attached files ─────────────────────────────────────────────────────
+const isImage = (f: FileRef) => /^image\/(jpeg|png|webp|gif)$/.test(f.type);
+
+/** One attached file: a thumbnail for photos, a labelled tile for PDFs and HEIC. Opens full size in a new tab. */
+export function FileTile({ f, size = 92, onRemove }: { f: FileRef; size?: number; onRemove?: () => void }) {
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flex: 'none' }}>
+      <a href={fileUrl(f.id)} target="_blank" rel="noreferrer" title={`${f.name} · ${bytes(f.size)}`}
+        style={{ display: 'grid', placeItems: 'center', width: '100%', height: '100%', borderRadius: 16, overflow: 'hidden', background: 'var(--color-neutral-200)', color: 'var(--color-neutral-700)', textDecoration: 'none', fontSize: 11 }}>
+        {isImage(f) ? <img src={fileUrl(f.id)} alt={f.name} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <span style={{ display: 'grid', gap: 2, justifyItems: 'center', padding: 6, textAlign: 'center' }}><strong style={{ fontSize: 13 }}>{f.type === 'application/pdf' ? 'PDF' : 'Photo'}</strong><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: size - 12 }}>{f.name}</span></span>}
+      </a>
+      {onRemove && <button type="button" className="btn btn-secondary" aria-label={`Remove ${f.name}`} onClick={onRemove} style={{ position: 'absolute', top: -6, right: -6, width: 24, height: 24, padding: 0, fontSize: 13 }}>×</button>}
+    </div>
+  );
+}
+
+function FilesInput({ domain, value, onChange }: { domain: string; value: FileRef[]; onChange: (v: FileRef[]) => void }) {
+  const [busy, setBusy] = useState(0);
+  const [err, setErr] = useState('');
+  const add = async (list: FileList | null) => {
+    if (!list?.length) return;
+    setErr('');
+    setBusy(list.length);
+    const added: FileRef[] = [];
+    for (const f of Array.from(list)) {
+      try { added.push(await uploadFile(domain, f)); } catch (e) { setErr(`${f.name}: ${(e as Error).message}`); }
+    }
+    setBusy(0);
+    onChange([...value, ...added]);
+  };
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {value.map((f) => <FileTile key={f.id} f={f} onRemove={() => onChange(value.filter((x) => x.id !== f.id))} />)}
+        <label style={{ width: 92, height: 92, borderRadius: 16, border: '1.5px dashed var(--color-neutral-400)', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, cursor: 'pointer', color: 'var(--color-neutral-700)', padding: 6 }}>
+          {busy ? <span className="spin">Uploading…</span> : <span>+ Photo<br />or PDF</span>}
+          <input type="file" accept={FILE_ACCEPT} multiple hidden onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
+        </label>
+      </div>
+      {err && <div style={{ color: 'var(--color-accent-700)', fontSize: 12 }}>{err}</div>}
+    </div>
+  );
+}
+
+// ── list parts: a small table, one row per item ───────────────────────
+type Row = Record<string, unknown>;
+
+function ListInput({ p, value, onChange, currency }: { p: Part; value: Row[]; onChange: (v: Row[]) => void; currency: string }) {
+  const cols = p.of ?? [];
+  // Always one blank row at the end to type into.
+  const rows = [...value, {}];
+  const setCell = (i: number, k: string, v: unknown) => {
+    const next = rows.map((r, j) => (j === i ? { ...r, [k]: v } : r));
+    onChange(next.filter((r) => !rowEmpty(r)));
+  };
+  const width = (c: Part) => (c.type === 'number' ? '64px' : c.type === 'money' ? '96px' : c.required ? 'minmax(120px,2fr)' : 'minmax(80px,1fr)');
+  const grid = `${cols.map(width).join(' ')} 28px`;
+  return (
+    <div style={{ display: 'grid', gap: 6, overflowX: 'auto' }}>
+      <div className="text-muted" style={{ display: 'grid', gridTemplateColumns: grid, gap: 6, fontSize: 11 }}>{cols.map((c) => <span key={c.key}>{c.label}</span>)}<span /></div>
+      {rows.map((r, i) => (
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: grid, gap: 6, alignItems: 'center' }}>
+          {cols.map((c) => {
+            const v = r[c.key];
+            const shown = c.type === 'money' ? String((v as { amount?: unknown } | undefined)?.amount ?? '') : String(v ?? '');
+            return (
+              <input key={c.key} className="input" aria-label={`${c.label}, row ${i + 1}`} inputMode={c.type === 'number' || c.type === 'money' ? 'decimal' : undefined}
+                value={shown} placeholder={i === value.length && c.required ? 'Add an item' : ''} style={{ padding: '8px 12px', fontSize: 13, minWidth: 0 }}
+                onChange={(e) => setCell(i, c.key, c.type === 'money' ? (e.target.value === '' ? '' : { amount: e.target.value, currency }) : e.target.value)} />
+            );
+          })}
+          {i < value.length ? <button type="button" className="btn btn-ghost" aria-label={`Remove row ${i + 1}`} onClick={() => onChange(value.filter((_, j) => j !== i))} style={{ padding: 0, width: 28, height: 28 }}>×</button> : <span />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const rowEmpty = (r: Row) => Object.values(r).every((v) => v === '' || v === undefined || v === null);
+
+/** Typed rows for the API: numbers as numbers, blank cells and rows dropped. */
+function cleanRows(p: Part, rows: Row[]): Row[] {
+  return rows.map((r) => {
+    const out: Row = {};
+    for (const c of p.of ?? []) {
+      const v = r[c.key];
+      if (v === '' || v === undefined || v === null) continue;
+      if (c.type === 'money') { const m = v as { amount: string | number; currency: string }; if (m.amount !== '') out[c.key] = { amount: Number(m.amount), currency: m.currency || 'USD' }; }
+      else if (c.type === 'number') out[c.key] = Number(v);
+      else out[c.key] = typeof v === 'string' ? v.trim() : v;
+    }
+    return out;
+  }).filter((r) => Object.keys(r).length);
+}
+
 const titleKeys = (d: Domain) => [...d.title.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
 
 // ── the editor: a side panel generated from the domain's schema ───────
-export function RecordEditor({ d, rec, contacts, onClose, onSaved }: { d: Domain; rec: Rec | null; contacts: ContactLite[]; onClose: () => void; onSaved: () => void }) {
+export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: { d: Domain; rec: Rec | null; contacts: ContactLite[]; onClose: () => void; onSaved: () => void; defaults?: Record<string, unknown> }) {
   const { run, busy } = useAction();
   const [vals, setVals] = useState<Record<string, unknown>>(() => {
-    if (!rec) return {};
+    if (!rec) return { ...defaults };
     // Secret parts arrive masked: start them blank, keep them unless replaced.
     return Object.fromEntries(Object.entries(rec.data).filter(([k]) => !rec.masked.includes(k)));
   });
@@ -193,6 +300,9 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved }: { d: Domain
   const extra = d.parts.filter((p) => !essential.includes(p));
   const extraFilled = extra.some((p) => vals[p.key] !== undefined && vals[p.key] !== '' || rec?.masked.includes(p.key));
 
+  // Line-item prices follow the currency of the first amount entered (a receipt's total).
+  const currency = d.parts.filter((p) => p.type === 'money').map((p) => (vals[p.key] as { currency?: string } | undefined)?.currency).find(Boolean) || 'USD';
+
   const set = (k: string, v: unknown) => {
     setVals((s) => ({ ...s, [k]: v }));
     setTouched((t) => new Set(t).add(k));
@@ -209,6 +319,9 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved }: { d: Domain
         v = m.amount === '' || m.amount === undefined ? null : { amount: Number(m.amount), currency: m.currency || 'USD' };
       }
       if (p.type === 'number' && v !== '' && v !== undefined) v = Number(v);
+      if (p.type === 'list' && Array.isArray(v)) v = cleanRows(p, v as Row[]);
+      if (p.type === 'files' && Array.isArray(v)) v = (v as FileRef[]).map((f) => f.id);
+      if (Array.isArray(v) && !v.length) v = rec ? null : undefined;
       data[p.key] = v === '' || v === undefined ? (rec ? null : undefined) : v;
       if (data[p.key] === undefined) delete data[p.key];
     }
@@ -233,7 +346,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved }: { d: Domain
         {p.label}{p.required && <span aria-hidden style={{ color: 'var(--color-accent-500)' }}>*</span>}
         {p.sensitivity === 'secret' && <span className="tag tag-accent" style={{ padding: '1px 8px', fontSize: 10, gap: 4 }}><Lock style={{ width: 8, height: 9 }} />Secret</span>}
       </label>
-      <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} />
+      <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} domain={d.id} currency={currency} />
     </div>
   );
 
@@ -287,7 +400,11 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved }: { d: Domain
 
 /** Key/value details of a record, with masked secrets. */
 export function Details({ d, rec, revealed, contacts, skip = [] }: { d: Domain; rec: Rec; revealed?: Record<string, unknown>; contacts: ContactLite[]; skip?: string[] }) {
+  const has = (p: Part) => !skip.includes(p.key) && Array.isArray(rec.data[p.key]) && (rec.data[p.key] as unknown[]).length > 0;
+  const files = d.parts.filter((p) => p.type === 'files' && has(p)).flatMap((p) => rec.data[p.key] as FileRef[]);
+  const lists = d.parts.filter((p) => p.type === 'list' && has(p) && !rec.masked.includes(p.key));
   const rows = d.parts
+    .filter((p) => p.type !== 'files' && p.type !== 'list')
     .filter((p) => !skip.includes(p.key) && (rec.data[p.key] !== undefined && rec.data[p.key] !== null || rec.masked.includes(p.key)))
     .map((p) => {
       const masked = rec.masked.includes(p.key) && !revealed;
@@ -295,16 +412,39 @@ export function Details({ d, rec, revealed, contacts, skip = [] }: { d: Domain; 
       return { p, text: masked ? '••••••' : show(p, v, contacts), masked };
     })
     .filter((r) => r.text);
-  if (!rows.length) return null;
+  if (!rows.length && !files.length && !lists.length) return null;
   return (
-    <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: '10px 18px', margin: '12px 0 0' }}>
-      {rows.map(({ p, text, masked }) => (
-        <div key={p.key} style={{ minWidth: 0 }}>
-          <dt className="text-muted" style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>{p.label}{p.sensitivity === 'secret' && <Lock style={{ width: 8, height: 9 }} />}</dt>
-          <dd style={{ margin: 0, fontSize: 14, overflowWrap: 'anywhere', whiteSpace: p.type === 'longtext' ? 'pre-wrap' : undefined, fontFamily: masked || p.type === 'last4' ? 'var(--mono)' : undefined, color: masked ? 'var(--color-neutral-500)' : undefined }}>{text}</dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      {rows.length > 0 && (
+        <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: '10px 18px', margin: '12px 0 0' }}>
+          {rows.map(({ p, text, masked }) => (
+            <div key={p.key} style={{ minWidth: 0 }}>
+              <dt className="text-muted" style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>{p.label}{p.sensitivity === 'secret' && <Lock style={{ width: 8, height: 9 }} />}</dt>
+              <dd style={{ margin: 0, fontSize: 14, overflowWrap: 'anywhere', whiteSpace: p.type === 'longtext' ? 'pre-wrap' : undefined, fontFamily: masked || p.type === 'last4' ? 'var(--mono)' : undefined, color: masked ? 'var(--color-neutral-500)' : undefined }}>{text}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {lists.map((p) => <ListTable key={p.key} p={p} rows={(revealed?.[p.key] ?? rec.data[p.key]) as Row[]} contacts={contacts} />)}
+      {files.length > 0 && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>{files.map((f) => <FileTile key={f.id} f={f} size={72} />)}</div>}
+    </>
+  );
+}
+
+export function ListTable({ p, rows, contacts }: { p: Part; rows: Row[]; contacts: ContactLite[] }) {
+  const cols = (p.of ?? []).filter((c) => rows.some((r) => r[c.key] !== undefined));
+  return (
+    <div style={{ marginTop: 14, overflowX: 'auto' }}>
+      <div className="text-muted" style={{ fontSize: 11, marginBottom: 4 }}>{p.label}</div>
+      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>
+        <thead><tr>{cols.map((c) => <th key={c.key} className="text-muted" style={{ textAlign: c.type === 'money' || c.type === 'number' ? 'right' : 'left', fontWeight: 500, fontSize: 11, padding: '4px 8px 4px 0' }}>{c.label}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => (
+          <tr key={i} style={{ borderTop: '1px solid var(--color-divider)' }}>
+            {cols.map((c) => <td key={c.key} style={{ padding: '6px 8px 6px 0', textAlign: c.type === 'money' || c.type === 'number' ? 'right' : 'left', fontVariantNumeric: 'tabular-nums' }}>{show(c, r[c.key], contacts)}</td>)}
+          </tr>
+        ))}</tbody>
+      </table>
+    </div>
   );
 }
 

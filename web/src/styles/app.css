@@ -46,6 +46,15 @@ a:hover { color: var(--color-accent-800); }
   .inbox .inbox-back { display: inline-flex; }
 }
 
+/* Receipts list: date, merchant, tags, total */
+.receipt-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto 96px; align-items: center; width: 100%; }
+.receipt-tags { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 560px) {
+  .receipt-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .receipt-row > :first-child { grid-column: 1 / -1; }
+  .receipt-tags { grid-column: 1 / -1; justify-content: flex-start; order: 5; }
+}
+
 /* Clickable rows */
 .row-btn { cursor: pointer; }
 .spin { animation: ldpulse 1.2s infinite; }
