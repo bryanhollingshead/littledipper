@@ -14,6 +14,7 @@ import miscRoutes from './routes/misc.js';
 import domainRoutes from './routes/domains.js';
 import messageRoutes from './routes/messages.js';
 import documentRoutes from './routes/documents.js';
+import bigDipperRoutes from './routes/bigDipper.js';
 
 const MIME: Record<string, string> = {
   '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8', '.svg': 'image/svg+xml',
@@ -70,6 +71,7 @@ export async function buildApp() {
   await app.register(miscRoutes);
   await app.register(messageRoutes);
   await app.register(documentRoutes);
+  await app.register(bigDipperRoutes);
   await app.register(domainRoutes);
 
   // The React app: built files from web/dist; every other non-API GET gets index.html.

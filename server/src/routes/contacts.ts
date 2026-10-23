@@ -44,6 +44,41 @@ async function sendRequest(link: LinkDoc, offeredFields: string[], note: string,
   });
 }
 
+/** Look up a node and send it a signed connection request. shareProfile: grant the basic profile once they approve. */
+export async function requestConnection(keyId: string, address: string, offeredFields: string[], note: string, shareProfile: boolean) {
+  const { origin, invite } = parsePeerInput(address);
+  const d = await lookupDescriptor(origin);
+  const n = await getNode();
+  if (d.nodeId === n._id) throw bad('self', "That's your own Little Dipper");
+  const existing = await existingForNode(d.nodeId);
+  if (existing && existing.link.status === 'active') throw new HttpError(409, 'already_connected', `You're already connected with ${existing.contact.displayName}`);
+  if (existing && existing.link.status === 'pending_in') throw new HttpError(409, 'request_waiting', `${existing.contact.displayName} already asked to connect. Review their request instead.`);
+  if (existing) throw new HttpError(409, 'request_pending', `You already asked ${existing.contact.displayName}. Use Resend on their contact page.`);
+  const fields = await allFields();
+  const offered = offeredFields.filter((k) => fields.some((f) => f.key === k && f.sensitivity === 'sensitive'));
+  const requestId = newId('req');
+  const name = d.displayName || displayAddr(d.address);
+  const { contact, link } = await newNodeContact({ displayName: name, address: d.address, nodeId: d.nodeId, signingKey: d.signingKey, version: d.version, status: 'pending_out', requestId });
+  try {
+    await sendRequest(link, offered, note.slice(0, 500), invite);
+  } catch (e) {
+    await ctx.store.remove('contacts', contact._id);
+    await ctx.store.remove('nodeLinks', link._id);
+    throw e;
+  }
+  // What we'll share once they approve: basic profile (unless told not to; no grant at all means shared) + the extras we offered.
+  await setProfileGrant(contact._id, shareProfile);
+  for (const k of offered) await setFieldGrant(contact._id, k, true);
+  const t = now();
+  await ctx.store.insert<RequestDoc>('connectionRequests', {
+    _id: newId('req'), direction: 'out', requestId, fromNodeId: n._id, peerName: name, fromNode: displayAddr(canonicalUrl(n)), toNode: displayAddr(d.address),
+    offeredFields: offered, offeredLabels: [], requestedFields: [], note, nonce: randomToken(8), signature: '', inviteId: null,
+    quiet: false, status: 'pending', contactId: contact._id, linkId: link._id, createdAt: t, expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString(),
+  });
+  await audit({ actor: ownerActor(keyId), action: 'link.request.out', resource: `contacts/${contact._id}`, text: `You sent ${name} a connection request`, tone: 'request' });
+  return { delivered: true, contactId: contact._id, requestId };
+}
+
 export default async function contactRoutes(app: FastifyInstance) {
   // ── contacts ─────────────────────────────────────────────────────────
   app.get('/api/v1/contacts', async (req) => {
@@ -204,38 +239,9 @@ export default async function contactRoutes(app: FastifyInstance) {
   app.post('/api/v1/federation/requests', async (req, reply) => {
     const p = await requireOwner(req, 'contacts:write');
     const b = (req.body || {}) as { address?: string; offeredFields?: string[]; note?: string };
-    const { origin, invite } = parsePeerInput(String(b.address || ''));
-    const d = await lookupDescriptor(origin);
-    const n = await getNode();
-    if (d.nodeId === n._id) throw bad('self', "That's your own Little Dipper");
-    const existing = await existingForNode(d.nodeId);
-    if (existing && existing.link.status === 'active') throw new HttpError(409, 'already_connected', `You're already connected with ${existing.contact.displayName}`);
-    if (existing && existing.link.status === 'pending_in') throw new HttpError(409, 'request_waiting', `${existing.contact.displayName} already asked to connect. Review their request instead.`);
-    if (existing) throw new HttpError(409, 'request_pending', `You already asked ${existing.contact.displayName}. Use Resend on their contact page.`);
-    const fields = await allFields();
-    const offered = (b.offeredFields || []).filter((k) => fields.some((f) => f.key === k && f.sensitivity === 'sensitive'));
-    const requestId = newId('req');
-    const name = d.displayName || displayAddr(d.address);
-    const { contact, link } = await newNodeContact({ displayName: name, address: d.address, nodeId: d.nodeId, signingKey: d.signingKey, version: d.version, status: 'pending_out', requestId });
-    try {
-      await sendRequest(link, offered, String(b.note || '').slice(0, 500), invite);
-    } catch (e) {
-      await ctx.store.remove('contacts', contact._id);
-      await ctx.store.remove('nodeLinks', link._id);
-      throw e;
-    }
-    // What we'll share once they approve: basic profile + the extras we offered.
-    await setProfileGrant(contact._id, true);
-    for (const k of offered) await setFieldGrant(contact._id, k, true);
-    const t = now();
-    await ctx.store.insert<RequestDoc>('connectionRequests', {
-      _id: newId('req'), direction: 'out', requestId, fromNodeId: n._id, peerName: name, fromNode: displayAddr(canonicalUrl(n)), toNode: displayAddr(d.address),
-      offeredFields: offered, offeredLabels: [], requestedFields: [], note: String(b.note || ''), nonce: randomToken(8), signature: '', inviteId: null,
-      quiet: false, status: 'pending', contactId: contact._id, linkId: link._id, createdAt: t, expiresAt: new Date(Date.now() + REQUEST_TTL_DAYS * 86400_000).toISOString(),
-    });
-    await audit({ actor: ownerActor(p.key._id), action: 'link.request.out', resource: `contacts/${contact._id}`, text: `You sent ${name} a connection request`, tone: 'request' });
+    const out = await requestConnection(p.key._id, String(b.address || ''), b.offeredFields || [], String(b.note || ''), true);
     reply.code(202);
-    return { delivered: true, contactId: contact._id, requestId };
+    return out;
   });
 
   app.get('/api/v1/federation/requests', async (req) => {

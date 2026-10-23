@@ -71,9 +71,9 @@ class Client {
   }
 }
 
-function startNode(port: number, dir: string): Promise<{ proc: ChildProcess; claimUrl: string }> {
+function startNode(port: number, dir: string, extra: Record<string, string> = {}): Promise<{ proc: ChildProcess; claimUrl: string }> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('npx', ['tsx', 'src/server.ts'], { cwd: path.resolve(import.meta.dirname, '..'), env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: `http://localhost:${port}`, LD_RETRY_BASE_MS: '300' } });
+    const proc = spawn('npx', ['tsx', 'src/server.ts'], { cwd: path.resolve(import.meta.dirname, '..'), env: { ...process.env, PORT: String(port), LD_DATA_DIR: dir, LOG_LEVEL: 'warn', LD_PUBLIC_URL: `http://localhost:${port}`, LD_RETRY_BASE_MS: '300', ...extra } });
     let claimUrl = '';
     proc.stdout!.on('data', (d: Buffer) => {
       const s = d.toString();
@@ -101,7 +101,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main() {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'ld-smoke-'));
-  const [A, firstB] = await Promise.all([startNode(4201, path.join(tmp, 'a')), startNode(4202, path.join(tmp, 'b'))]);
+  const [A, firstB] = await Promise.all([startNode(4201, path.join(tmp, 'a'), { LD_BIG_DIPPER_URL: 'http://localhost:4202' }), startNode(4202, path.join(tmp, 'b'))]);
   let B = firstB; // restarted mid-test to check offline delivery
   const a = new Client('http://localhost:4201'), b = new Client('http://localhost:4202');
   const ka = new SoftKey(), kb = new SoftKey();
@@ -395,6 +395,24 @@ async function main() {
     ok(afterB.status === 'plain' && afterB.kind === 'person', 'disconnect leaves B with a plain contact');
     await a.call('POST', `/api/v1/messages/conversations/${cA.id}`, { body: 'Still there?' }, [409]);
     ok((await a.call('GET', `/api/v1/messages/conversations/${cA.id}`)).items.length === 3, 'after disconnect: sending is refused, history is kept');
+
+    console.log('big dipper');
+    let bdv = await a.call('GET', '/api/v1/big-dipper');
+    ok(bdv.available && bdv.services.length === 3 && bdv.chosen.length === 0 && bdv.upgrades === 'security', 'Big Dipper: available, three services, nothing chosen, security fixes by default');
+    await a.call('PUT', '/api/v1/big-dipper', { services: ['telepathy'] }, [400]);
+    await a.call('PUT', '/api/v1/big-dipper', { services: ['identity', 'upgrades'], upgrades: 'everything' }, [400]);
+    await a.call('PUT', '/api/v1/big-dipper', { services: ['identity', 'upgrades'], upgrades: 'all' });
+    bdv = await a.call('GET', '/api/v1/big-dipper');
+    ok(bdv.chosen.join() === 'identity,upgrades' && bdv.upgrades === 'all', 'choices are saved and unknown ones refused');
+    await a.call('POST', '/api/v1/big-dipper/connect', { services: [] }, [400]);
+    await b.call('PUT', '/api/v1/public-profile', { connectRequests: 'anyone' });
+    const bdc = await a.call('POST', '/api/v1/big-dipper/connect', { services: ['interface'] }, [202, 409]);
+    bdv = await a.call('GET', '/api/v1/big-dipper');
+    ok(bdv.contact && bdv.chosen.join() === 'interface', `connect sends the request (${bdc?.contactId ? 'new' : 'already known'}) and Big Dipper shows as a contact`);
+    if (bdc?.contactId) {
+      const g = await a.call('GET', `/api/v1/contacts/${bdc.contactId}`);
+      ok(!g.grants.profile && !g.grants.fields.length, 'Big Dipper gets no profile and no fields');
+    }
 
     console.log('backups & export');
     const bk = await a.call('POST', '/api/v1/node/backups', {});

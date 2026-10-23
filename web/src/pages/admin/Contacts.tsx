@@ -4,6 +4,7 @@ import { ago, get, initials, post, STATUS, type Contact } from '../../api';
 import { ErrorNote, Loading, Pills, useAction, useAsync } from '../../ui';
 import { useAdmin } from './Layout';
 import AddContact from './AddContact';
+import BigDipperBanner from './BigDipperBanner';
 
 type Req = { _id: string; contactId: string; peerName: string; fromNode: string; requestedFields: string[]; inviteId: string | null; quiet: boolean };
 
@@ -43,6 +44,8 @@ export default function Contacts() {
           <button className="btn btn-primary" onClick={() => setModal('person')}>Add contact</button>
         </div>
       </div>
+
+      <BigDipperBanner />
 
       {reqs?.items.map((r) => (
         <div key={r._id} style={{ marginTop: 22, borderRadius: 32, background: r.quiet ? 'var(--color-neutral-100)' : 'var(--color-accent-100)', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
