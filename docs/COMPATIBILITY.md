@@ -130,4 +130,4 @@ The current code doesn't meet these rules yet in a few places:
 
 ## Open questions
 
-Tracked in [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md).
+Tracked in OPEN-QUESTIONS.md.

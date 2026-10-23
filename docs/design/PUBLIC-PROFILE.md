@@ -1,6 +1,6 @@
 # Public Profile
 
-> **Status: sections built** on branch `receipts` (2026-10-22). Ideas below are not built.
+> **Status: sections built** (2026-10-22). Ideas below are not built.
 
 ## Built: sections
 

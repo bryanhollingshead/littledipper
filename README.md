@@ -106,12 +106,12 @@ Card and bank numbers are stored as the last four digits only, and the model has
 
 ## Not built yet / known gaps
 
-- Big Dipper, ID verification and the API docs site are out of scope. **API docs** is a stub.
+- Big Dipper itself doesn't exist yet. Settings → Big Dipper presents the services and saves the owner's choices; connecting works once `LD_BIG_DIPPER_URL` is set. The API docs site is out of scope, and **API docs** is a stub.
 - The "people my contacts know" (`fof`) check uses hashed mutual-contact hints supplied by the requester. These are not yet cryptographically verified.
 - The recovery kit holds the signing and backup keys, but not recovery codes, which are only ever stored hashed.
 - Backups go to the data directory only. S3-compatible destinations are not implemented.
-- The portrait is still a placeholder (no avatar upload).
 - Requests can't ask for specific fields from the UI yet. The protocol supports `requestedFields`.
-- Domains have a full API but no admin screens yet, apart from the reference pages and shared-data display. Contact sharing per domain is API-only so far.
-- File attachments (passport scans etc.) aren't implemented yet. Records have no `attachments` part yet.
-- Domains can't be shown on the public profile yet, though the catalog marks which ones may be (`publicable`).
+
+## Docs
+
+See [docs/README.md](docs/README.md) for the compatibility rules and design notes.

@@ -1,6 +1,6 @@
 # Documents
 
-> **Status: first version built** on branch `receipts` (2026-10-22). The owner will use it and send revisions.
+> **Status: first version built** (2026-10-22). Revisions expected after real use.
 
 ## Decided
 

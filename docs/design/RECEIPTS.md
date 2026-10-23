@@ -1,6 +1,6 @@
 # Receipts
 
-> **Status: first version built** on branch `receipts` (2026-10-22). Built ahead of the documents module at the owner's request; its file storage is the groundwork that module will grow from.
+> **Status: first version built** (2026-10-22). Receipt photos are stored as documents ([DOCUMENTS.md](DOCUMENTS.md)).
 
 ## Built (first version)
 

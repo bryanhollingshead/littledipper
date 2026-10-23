@@ -1,6 +1,6 @@
 # Messaging and Email
 
-> **Status: first version built** on branch `messaging` (2026-10-21): text between connected Little Dippers, inbox, outbox with retries, encrypted at rest, `messages` capability. Organization services and email are not built.
+> **Status: first version built** (2026-10-21): text between connected Little Dippers, inbox, outbox with retries, encrypted at rest, `messages` capability. Organization services and email are not built.
 
 ## Decided
 
