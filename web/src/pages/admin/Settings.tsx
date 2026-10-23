@@ -4,9 +4,10 @@ import { startRegistration } from '@simplewebauthn/browser';
 import { addr, bytes, copy, del, get, longDate, patch, post, put, saveFile, whenLabel } from '../../api';
 import { Confirm, Dialog, Loading, Pills, QR, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
+import BigDipperSetup from './BigDipperSetup';
 
-type Tab = 'address' | 'hosting' | 'backups' | 'security';
-const TABS: [Tab, string][] = [['address', 'Address'], ['hosting', 'Hosting'], ['backups', 'Backups'], ['security', 'Security']];
+type Tab = 'address' | 'hosting' | 'backups' | 'security' | 'big-dipper';
+const TABS: [Tab, string][] = [['address', 'Address'], ['hosting', 'Hosting'], ['backups', 'Backups'], ['security', 'Security'], ['big-dipper', 'Big Dipper']];
 
 const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 14 }}>
@@ -32,6 +33,7 @@ export default function Settings() {
       {tab === 'hosting' && <HostingTab />}
       {tab === 'backups' && <BackupsTab />}
       {tab === 'security' && <SecurityTab />}
+      {tab === 'big-dipper' && <BigDipperSetup />}
     </div>
   );
 }

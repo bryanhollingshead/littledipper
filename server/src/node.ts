@@ -21,7 +21,7 @@ export type NodeDoc = Doc & {
   lastBackupAt?: string | null;
   blockedNodeIds?: string[];
   /** Big Dipper services the owner chose (saved even before Big Dipper exists). */
-  bigDipper?: { services: string[]; upgrades: string; updatedAt: string };
+  bigDipper?: { services: string[]; settings: Record<string, string>; updatedAt: string };
   /** One-time migrations already applied (see migrate.ts). */
   migrations?: string[];
   createdAt: string;

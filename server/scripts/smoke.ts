@@ -398,12 +398,12 @@ async function main() {
 
     console.log('big dipper');
     let bdv = await a.call('GET', '/api/v1/big-dipper');
-    ok(bdv.available && bdv.services.length === 3 && bdv.chosen.length === 0 && bdv.upgrades === 'security', 'Big Dipper: available, three services, nothing chosen, security fixes by default');
+    ok(bdv.available && bdv.services.length === 3 && bdv.chosen.length === 0 && bdv.settings['upgrades.mode'] === 'notify' && bdv.boundaries.length === 4, 'Big Dipper: available, three services, nothing chosen, notices by default');
     await a.call('PUT', '/api/v1/big-dipper', { services: ['telepathy'] }, [400]);
-    await a.call('PUT', '/api/v1/big-dipper', { services: ['identity', 'upgrades'], upgrades: 'everything' }, [400]);
-    await a.call('PUT', '/api/v1/big-dipper', { services: ['identity', 'upgrades'], upgrades: 'all' });
+    await a.call('PUT', '/api/v1/big-dipper', { services: ['upgrades'], settings: { 'upgrades.hosting': 'manual', 'upgrades.mode': 'all' } }, [400]);
+    await a.call('PUT', '/api/v1/big-dipper', { services: ['identity', 'upgrades'], settings: { 'upgrades.hosting': 'platform', 'upgrades.mode': 'all', 'identity.recheck': 'biennial' } });
     bdv = await a.call('GET', '/api/v1/big-dipper');
-    ok(bdv.chosen.join() === 'identity,upgrades' && bdv.upgrades === 'all', 'choices are saved and unknown ones refused');
+    ok(bdv.chosen.join() === 'identity,upgrades' && bdv.settings['upgrades.mode'] === 'all' && bdv.settings['identity.recheck'] === 'biennial', 'choices are saved; unknown services and options the hosting can’t do are refused');
     await a.call('POST', '/api/v1/big-dipper/connect', { services: [] }, [400]);
     await b.call('PUT', '/api/v1/public-profile', { connectRequests: 'anyone' });
     const bdc = await a.call('POST', '/api/v1/big-dipper/connect', { services: ['interface'] }, [202, 409]);
