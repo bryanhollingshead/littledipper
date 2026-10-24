@@ -262,7 +262,8 @@ export default async function nodeRoutes(app: FastifyInstance) {
         if (coll === 'nodeLinks') delete out.tokenFromPeerEnc;
         if (coll === 'messages' && isEncrypted(out.body)) out.body = JSON.parse(decrypt(ctx.keys.masterKey, out.body));
         if (coll === 'documents' && isEncrypted(out.text)) out.text = decrypt(ctx.keys.masterKey, out.text);
-        if (coll === 'shares') delete out.tokenHash;
+        if (coll === 'shares' || coll === 'copies') delete out.tokenHash;
+        if (coll === 'copies' && isEncrypted(out.snapshotEnc)) { out.snapshot = JSON.parse(decrypt(ctx.keys.masterKey, out.snapshotEnc)); delete out.snapshotEnc; }
         lines.push(JSON.stringify({ collection: coll, ...out }));
       }
     }

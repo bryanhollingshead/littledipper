@@ -284,6 +284,43 @@ async function main() {
     ok((await fetch(`${a.base}/api/v1/documents/${up.body.id}/shares`, { method: 'POST', headers: { ...asHelper, 'content-type': 'application/json' }, body: '{"hours":24}' })).status === 403, 'only the owner can create share links');
     await a.call('DELETE', `/api/v1/documents/${up.body.id}/shares/${share.id}`);
     ok((await fetch(`${a.base}/public/v1/shared/${token}`)).status === 404, 'turning a share link off works at once');
+    // Copies for people without a Little Dipper: a snapshot as a link, a file or text in an email
+    const allJobs = (await a.call('GET', '/api/v1/employment')).items;
+    await a.call('POST', '/api/v1/copies', { items: [{ domain: 'employment', includeSecret: true }] }, [409]);
+    ok(true, 'secret details in a copy need confirmation');
+    const cp = await a.call('POST', '/api/v1/copies', { items: [{ domain: 'employment', recordIds: [job.id] }], to: { email: 'Pat.Landlord@example.com', name: 'Pat Okoro' }, delivery: 'link', hours: 168, note: 'For the lease' });
+    ok(cp.contact?.created && cp.contact.displayName === 'Pat Okoro' && cp.url.includes('/c/') && cp.copy.link.active, 'sending a link to a new email adds them as a contact');
+    ok(cp.email.to === 'Pat.Landlord@example.com' && cp.email.body.includes(cp.url) && cp.email.body.startsWith('Hi Pat'), 'the email is written for the owner’s mail app');
+    const cpTok = cp.url.split('/c/')[1];
+    const seen = await (await fetch(`${a.base}/public/v1/copies/${cpTok}`)).json();
+    ok(seen.title === 'Employment' && seen.categories[0].records.length === 1 && seen.note === 'For the lease', 'the link opens the copy without signing in');
+    ok(!seen.categories[0].records[0].fields.some((f: any) => f.key === 'currentPay' || f.key === 'employeeId'), 'secret details stay out unless chosen');
+    await a.call('PATCH', `/api/v1/employment/${job.id}`, { data: { title: 'Studio director' } });
+    const seen2 = await (await fetch(`${a.base}/public/v1/copies/${cpTok}`)).json();
+    ok(seen2.categories[0].records[0].title === 'Design lead at Alder Studio', 'a copy is a snapshot: later edits don’t reach it');
+    await a.call('PATCH', `/api/v1/employment/${job.id}`, { data: { title: 'Design lead' } });
+    const pdf = await fetch(`${a.base}/public/v1/copies/${cpTok}/download?format=pdf`);
+    const pdfBytes = Buffer.from(await pdf.arrayBuffer());
+    ok(pdf.headers.get('content-type') === 'application/pdf' && pdfBytes.subarray(0, 5).toString() === '%PDF-' && pdfBytes.subarray(-6).toString().includes('%%EOF'), 'the person with the link can save a PDF');
+    const cpJson = await (await fetch(`${a.base}/public/v1/copies/${cpTok}/download?format=json`)).json();
+    ok(cpJson.format === 'little-dipper.copy/v1' && cpJson.categories[0].entries[0].details.employer === 'Alder Studio', 'and JSON');
+    const again = await a.call('POST', '/api/v1/copies', { items: [{ domain: 'employment', recordIds: allJobs.map((j: any) => j.id), includeSecret: true }], to: { email: 'pat.landlord@example.com' }, delivery: 'file', confirm: true });
+    ok(!again.contact.created && again.contact.id === cp.contact.id && again.url === null && again.copy.link === null, 'the same email finds the same contact; a file copy has no link');
+    const txt = await (await fetch(`${a.base}/api/v1/copies/${again.copy.id}/download?format=txt`, { headers: asOwner() })).text();
+    ok(txt.includes('Kiln Co') && txt.includes('$120,000'), 'the owner downloads the file to attach, secret details included when confirmed');
+    const inl = await a.call('POST', '/api/v1/copies', { items: [{ domain: 'employment', recordIds: [job.id] }], delivery: 'inline' });
+    ok(inl.contact === null && inl.email.body.includes('Alder Studio'), 'in-the-email copies put the text in the message');
+    const forPat = await a.call('GET', `/api/v1/copies?contactId=${cp.contact.id}`);
+    ok(forPat.items.length === 2 && (await a.call('GET', `/api/v1/contacts/${cp.contact.id}`)).lastActivity.text.startsWith('You sent a copy'), 'the contact page lists what you sent them');
+    ok((await fetch(`${a.base}/api/v1/copies`, { method: 'POST', headers: { ...asHelper, 'content-type': 'application/json' }, body: '{}' })).status === 403, 'only the owner’s browser can send copies');
+    await a.call('DELETE', `/api/v1/copies/${cp.copy.id}`);
+    ok((await fetch(`${a.base}/public/v1/copies/${cpTok}`)).status === 404 && (await fetch(`${a.base}/public/v1/copies/${cpTok}/download?format=pdf`)).status === 404, 'turning the link off works at once');
+    const short = await a.call('POST', '/api/v1/copies', { items: [{ domain: 'employment' }], hours: 0 });
+    ok(short.copy.link.expiresAt === null && short.copy.link.active, 'a link can run until it’s turned off');
+    await a.call('DELETE', `/api/v1/contacts/${cp.contact.id}`);
+    ok((await a.call('GET', '/api/v1/copies')).items.length === 4, 'deleting the contact keeps your history of copies');
+    await a.call('DELETE', `/api/v1/copies/${inl.copy.id}?forget=1`);
+    ok((await a.call('GET', '/api/v1/copies')).items.length === 3, 'a copy can be deleted from your history');
     // Receipts: a photo becomes a receipt document linked to the entry
     const soon = new Date(Date.now() + 10 * 86400_000).toISOString().slice(0, 10);
     const rc1 = await a.call('POST', '/api/v1/receipts', { data: {

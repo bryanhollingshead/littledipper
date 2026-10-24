@@ -89,6 +89,7 @@ Personal data is organised into **domains**, one per category. Each domain has i
 - **One source of truth**: the profile's Current address, Current city and Country of residence mirror the current residence; Email and Mobile phone mirror the primary contact methods.
 - **Sharing**: grant a contact a whole domain, either every record or current only. Secret parts are shared only with explicit confirmation. Peers read `GET /peer/v1/domains/{domain}`.
 - **Timeline**: `GET /api/v1/timeline` merges every dated record across domains.
+- **Copies**: for people without a Little Dipper, send a snapshot of chosen entries as a link (which can expire), a PDF/JSON/text file, or text in an email. A new email address becomes a contact. See [docs/design/COPIES.md](docs/design/COPIES.md).
 
 Card and bank numbers are stored as the last four digits only, and the model has no place for passwords.
 

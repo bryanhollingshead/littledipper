@@ -17,6 +17,7 @@ import Messages from './pages/admin/Messages';
 import Receipts from './pages/admin/Receipts';
 import Documents from './pages/admin/Documents';
 import SharedDocument from './pages/SharedDocument';
+import SharedCopy from './pages/SharedCopy';
 import PublicEditor from './pages/admin/PublicEditor';
 import Apps from './pages/admin/Apps';
 import Settings from './pages/admin/Settings';
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/connect" element={<Connect />} />
           <Route path="/s/:token" element={<SharedDocument />} />
+          <Route path="/c/:token" element={<SharedCopy />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Home />} />
             <Route path="data" element={<Navigate to="/admin/life/profile" replace />} />

@@ -10,7 +10,7 @@ import { MongoClient, type Db } from 'mongodb';
 export const COLLECTIONS = [
   'nodes', 'owners', 'fields', 'contacts', 'nodeLinks', 'grants',
   'connectionRequests', 'invites', 'apiKeys', 'publicProfile', 'audit', 'challenges', 'backups',
-  'records', 'domainDefs', 'messages', 'files', 'documents', 'shares',
+  'records', 'domainDefs', 'messages', 'files', 'documents', 'shares', 'copies',
 ] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
@@ -178,6 +178,7 @@ class MongoStore implements Store {
     await db.collection('messages').createIndex({ status: 1 });
     await db.collection('files').createIndex({ documentId: 1 });
     await db.collection('shares').createIndex({ tokenHash: 1 });
+    await db.collection('copies').createIndex({ contactId: 1 });
     return new MongoStore(client, db);
   }
   // The driver's types assume ObjectId _ids; ours are strings, so loosen them here.

@@ -4,6 +4,7 @@ import { get, post, SENS } from '../../api';
 import { ErrorNote, Loading, useAction, useAsync } from '../../ui';
 import { Details, duration, fetchCatalog, fmtRange, groupOf, Lock, Mono, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec } from '../../life';
 import { plural } from './LifeHub';
+import { CopyList, SendCopy } from './Copies';
 
 const FEEDS: Record<string, string> = { address: 'Current address', city: 'Current city', country_res: 'Country of residence', email: 'Email', phone: 'Mobile phone' };
 
@@ -27,6 +28,8 @@ export default function Category() {
   const { data: catalog, reload: reloadCatalog } = useAsync(fetchCatalog, []);
   const { data, error, reload } = useAsync(() => get<{ items: Rec[] }>(`/api/v1/${domain}`), [domain]);
   const [editing, setEditing] = useState<Rec | 'new' | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(0);
 
   const d = catalog?.find((x) => x.id === domain);
   if (error) return <div><Link className="btn btn-ghost" to="/admin/life">← My data</Link><ErrorNote error={error} /></div>;
@@ -46,7 +49,10 @@ export default function Category() {
           <h1 style={{ margin: 0 }}>{d.label}</h1>
           <p className="text-muted" style={{ margin: '4px 0 0', maxWidth: 620 }}>{d.description}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setEditing('new')}>Add {/^[aeiou]/i.test(d.noun) ? 'an' : 'a'} {d.noun}</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {data.items.length > 0 && <button className="btn btn-secondary" onClick={() => setSending(true)}>Send a copy</button>}
+          <button className="btn btn-primary" onClick={() => setEditing('new')}>Add {/^[aeiou]/i.test(d.noun) ? 'an' : 'a'} {d.noun}</button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '18px 0 6px' }}>
@@ -91,6 +97,9 @@ export default function Category() {
         </>
       )}
 
+      <div style={{ marginTop: 30 }}><CopyList query={`domain=${d.id}`} version={sent} heading={<h4>Copies you’ve sent</h4>} /></div>
+
+      {sending && catalog && <SendCopy catalog={catalog} start={d.id} onClose={() => setSending(false)} onSent={() => setSent((n) => n + 1)} />}
       {editing && <RecordEditor d={d} rec={editing === 'new' ? null : editing} contacts={contacts} onClose={() => setEditing(null)} onSaved={done} />}
     </div>
   );
@@ -122,3 +131,4 @@ function RecordCard({ d, r, contacts, onEdit, quiet }: { d: Domain; r: Rec; cont
     </div>
   );
 }
+

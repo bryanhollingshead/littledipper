@@ -13,6 +13,7 @@ How features work, or are meant to work. Each note opens with its status.
 | [MESSAGING-AND-EMAIL.md](design/MESSAGING-AND-EMAIL.md) | First version built |
 | [RECEIPTS.md](design/RECEIPTS.md) | First version built |
 | [DOCUMENTS.md](design/DOCUMENTS.md) | First version built |
+| [COPIES.md](design/COPIES.md) | First version built |
 | [PUBLIC-PROFILE.md](design/PUBLIC-PROFILE.md) | Sections built; ideas not built |
 | [DATA-ENTRY.md](design/DATA-ENTRY.md) | Direction agreed, not built |
 | [IDENTITY-VERIFICATION.md](design/IDENTITY-VERIFICATION.md) | Agreed in principle; needs Big Dipper |

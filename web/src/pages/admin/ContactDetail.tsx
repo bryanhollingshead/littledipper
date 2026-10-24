@@ -4,7 +4,8 @@ import { ago, copy, del, firstName, get, initials, patch, post, put, SENS, short
 import { Confirm, Dialog, ErrorNote, Loading, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import ContactAccess from './ContactAccess';
-import { fmtRange } from '../../life';
+import { fetchCatalog, fmtRange } from '../../life';
+import { CopyList, SendCopy } from './Copies';
 
 export default function ContactDetail() {
   const { id = '' } = useParams();
@@ -15,6 +16,9 @@ export default function ContactDetail() {
   const { data: c, error, reload, setData } = useAsync(() => get<CD>(`/api/v1/contacts/${id}`), [id]);
   const { data: fieldsResp } = useAsync(() => get<{ items: Field[] }>('/api/v1/owner/fields'), []);
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(0);
+  const { data: catalog } = useAsync(fetchCatalog, []);
   const [edit, setEdit] = useState<{ notes: string; methods: { type: string; label: string; value: string }[] } | null>(null);
 
   if (error) return <div><Link className="btn btn-ghost" to="/admin/contacts">← All contacts</Link><ErrorNote error={error} /></div>;
@@ -120,6 +124,15 @@ export default function ContactDetail() {
             {c.notes && <p className="text-muted" style={{ fontSize: 13, margin: '12px 0 0', whiteSpace: 'pre-wrap' }}>{c.notes}</p>}
           </div>
 
+          <div className="card" style={{ padding: '20px 24px', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+              <div className="card-kicker">Copies you’ve sent</div>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }} disabled={!catalog} onClick={() => setSending(true)}>Send a copy</button>
+            </div>
+            <CopyList query={`contactId=${c.id}`} showContact={false} version={sent} />
+            <div className="text-muted" style={{ fontSize: 12 }}>{isNode ? `A one-time snapshot as a link or a file, separate from what you share with ${first} here.` : `Send ${first} a snapshot of entries from My data as a link, a file or an email.`}</div>
+          </div>
+
           {isNode && (
             <div className="card" style={{ padding: '20px 24px', gap: 4 }}>
               <div className="card-kicker">{theirTitle}</div>
@@ -195,6 +208,7 @@ export default function ContactDetail() {
           <div className="field"><label htmlFor="notes">Notes</label><textarea id="notes" className="input" value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} style={{ borderRadius: 20 }} /></div>
         </Dialog>
       )}
+      {sending && catalog && <SendCopy catalog={catalog} contact={c} onClose={() => setSending(false)} onSent={() => setSent((n) => n + 1)} />}
       {confirm && <Confirm cfg={confirm} onClose={() => setConfirm(null)} />}
     </div>
   );
