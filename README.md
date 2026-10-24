@@ -24,7 +24,7 @@ The server prints a claim link on first boot:
 [little-dipper] Claim this node: http://localhost:4000/claim?token=ct_…
 ```
 
-Open it **on port 5173** in development (`http://localhost:5173/claim?token=…`). Passkeys need a real browser on `localhost` or https.
+In development, pages on :4000 redirect to the web app on :5173 (`LD_WEB_DEV_URL`), so claim, share and copy links work as printed. Passkeys need a real browser on `localhost` or https.
 
 With no `MONGODB_URI`, data goes to a local JSON file store in `./data` (fine for development and tiny installs). Set `MONGODB_URI` to use MongoDB.
 
@@ -62,6 +62,7 @@ The smoke test starts two instances, claims both with a software passkey, then r
 | `LD_DEPLOY_HOOK_URL` | unset | Enables **Update now** (e.g. a Render deploy hook). A backup is taken first. |
 | `LD_UPDATE_FEED_URL` | unset | JSON `{ version, notes }` for the latest release. |
 | `LD_ALLOW_HTTP_PEERS` | auto on localhost | Allow `http://` peers (development only). |
+| `LD_WEB_DEV_URL` | unset (`npm run dev` sets `http://localhost:5173`) | Development only: page requests redirect to the Vite dev server. |
 
 ## Deploy
 
@@ -88,8 +89,8 @@ Personal data is organised into **domains**, one per category. Each domain has i
 - **Secret parts** (ID numbers, pay, account details…) are encrypted one by one, masked in the API, and revealed only through a logged call.
 - **One source of truth**: the profile's Current address, Current city and Country of residence mirror the current residence; Email and Mobile phone mirror the primary contact methods.
 - **Sharing**: grant a contact a whole domain, either every record or current only. Secret parts are shared only with explicit confirmation. Peers read `GET /peer/v1/domains/{domain}`.
-- **Timeline**: `GET /api/v1/timeline` merges every dated record across domains.
 - **Copies**: for people without a Little Dipper, send a snapshot of chosen entries as a link (which can expire), a PDF/JSON/text file, or text in an email. A new email address becomes a contact. See [docs/design/COPIES.md](docs/design/COPIES.md).
+- **Timeline**: `GET /api/v1/timeline` merges every dated record across domains.
 
 Card and bank numbers are stored as the last four digits only, and the model has no place for passwords.
 

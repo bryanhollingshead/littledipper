@@ -82,6 +82,7 @@ export async function buildApp() {
   app.setNotFoundHandler((req, reply) => {
     const urlPath = req.url.split('?')[0];
     const isApi = API_PREFIXES.some((p) => urlPath.startsWith(p));
+    if ((req.method === 'GET' || req.method === 'HEAD') && !isApi && config.webDevUrl) return reply.redirect(config.webDevUrl + req.url, 302);
     if ((req.method === 'GET' || req.method === 'HEAD') && !isApi && indexHtml) {
       const file = staticFile(root, urlPath);
       if (file) {

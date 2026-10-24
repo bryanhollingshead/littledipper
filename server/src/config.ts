@@ -35,6 +35,8 @@ export const config = {
   mongoDb: process.env.MONGODB_DB || 'little_dipper',
   /** Built web app to serve. */
   webDist: path.resolve(process.env.LD_WEB_DIST || new URL('../../web/dist', import.meta.url).pathname),
+  /** Development: send page requests to the Vite dev server, so links to this address (claim, share, copy) open the current app. */
+  webDevUrl: (process.env.LD_WEB_DEV_URL || '').replace(/\/+$/, ''),
   hosting: detectHosting(),
   /** Optional: a deploy hook (e.g. Render deploy hook URL) used by "Update now". */
   deployHookUrl: process.env.LD_DEPLOY_HOOK_URL || '',

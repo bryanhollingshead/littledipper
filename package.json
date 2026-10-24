@@ -5,7 +5,7 @@
   "description": "Little Dipper: a self-hosted personal data store. Your data, not your definition.",
   "workspaces": ["server", "web"],
   "scripts": {
-    "dev": "npm run dev -w server & npm run dev -w web",
+    "dev": "LD_WEB_DEV_URL=http://localhost:5173 npm run dev -w server & npm run dev -w web",
     "build": "npm run build -w web && npm run build -w server",
     "start": "npm run start -w server",
     "claim-link": "npm run cli -w server -- claim-link",
