@@ -222,7 +222,7 @@ function DocumentPanel({ doc, catalog, contacts, onClose, onChange }: { doc: Doc
   const [newUrl, setNewUrl] = useState('');
   const [showText, setShowText] = useState(false);
   const { data: shares, reload: reloadShares } = useAsync(() => get<{ items: Share[] }>(`/api/v1/documents/${doc.id}/shares`), [doc.id]);
-  const { data: candidates } = useAsync(() => (linkDomain ? get<{ items: Rec[] }>(`/api/v1/${linkDomain}`) : Promise.resolve({ items: [] as Rec[] })), [linkDomain]);
+  const { data: candidates } = useAsync(() => (linkDomain ? get<{ items: Rec[] }>(`/api/v1/data/${linkDomain}`) : Promise.resolve({ items: [] as Rec[] })), [linkDomain]);
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && viewing === null && !confirm && onClose();

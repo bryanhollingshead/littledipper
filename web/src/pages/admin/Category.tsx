@@ -26,7 +26,7 @@ export default function Category() {
   const { domain = '' } = useParams();
   const contacts = useContactsLite();
   const { data: catalog, reload: reloadCatalog } = useAsync(fetchCatalog, []);
-  const { data, error, reload } = useAsync(() => get<{ items: Rec[] }>(`/api/v1/${domain}`), [domain]);
+  const { data, error, reload } = useAsync(() => get<{ items: Rec[] }>(`/api/v1/data/${domain}`), [domain]);
   const [editing, setEditing] = useState<Rec | 'new' | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(0);
@@ -110,7 +110,7 @@ function RecordCard({ d, r, contacts, onEdit, quiet }: { d: Domain; r: Rec; cont
   const [revealed, setRevealed] = useState<Record<string, unknown> | null>(null);
   const reveal = async () => {
     if (revealed) return setRevealed(null);
-    const x = await run(() => post<Rec>(`/api/v1/${d.id}/${r.id}/reveal`));
+    const x = await run(() => post<Rec>(`/api/v1/data/${d.id}/${r.id}/reveal`));
     if (x) setRevealed(x.data);
   };
   const range = fmtRange(r.validFrom, r.validTo);

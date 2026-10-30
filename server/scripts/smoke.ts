@@ -125,8 +125,8 @@ async function main() {
     ok(true, 'used recovery code is rejected');
 
     console.log('my data');
-    await a.call('POST', '/api/v1/contact_methods', { data: { kind: 'phone', label: 'Mobile', value: '+1 (503) 555-0148', primary: true } });
-    await a.call('POST', '/api/v1/residences', { data: { street1: '2214 SE Ankeny St', city: 'Portland', region: 'OR', postalCode: '97214', country: 'us', ownership: 'rent' }, validFrom: '2019-06' });
+    await a.call('POST', '/api/v1/data/contact_methods', { data: { kind: 'phone', label: 'Mobile', value: '+1 (503) 555-0148', primary: true } });
+    await a.call('POST', '/api/v1/data/residences', { data: { street1: '2214 SE Ankeny St', city: 'Portland', region: 'OR', postalCode: '97214', country: 'us', ownership: 'rent' }, validFrom: '2019-06' });
     const ssn = await a.call('POST', '/api/v1/owner/fields', { label: 'Passport number', value: 'X1234567', sensitivity: 'secret', section: 'gov' });
     const fields = (await a.call('GET', '/api/v1/owner/fields')).items;
     ok(fields.find((f: any) => f.key === ssn.key).value.startsWith('••••'), 'secret value is masked');
@@ -182,41 +182,44 @@ async function main() {
 
     console.log('domains');
     const cat = (await a.call('GET', '/api/v1/catalog')).domains;
-    ok(cat.length >= 20 && cat.some((d: any) => d.id === 'employment' && d.endpoint === '/api/v1/employment'), `catalog lists ${cat.length} domains`);
+    ok(cat.length >= 20 && cat.some((d: any) => d.id === 'employment' && d.endpoint === '/api/v1/data/employment'), `catalog lists ${cat.length} domains`);
+    ok((await a.call('GET', '/api/v1/residences')).items.length === (await a.call('GET', '/api/v1/data/residences')).items.length, 'old /api/v1/{domain} path still answers until beta');
+    await a.call('GET', '/api/v1/data/messages', undefined, [404]);
+    ok(true, 'fixed routes are not domains under /data');
     // Residences feed the derived profile fields
-    const res = (await a.call('GET', '/api/v1/residences')).items[0];
-    await a.call('POST', '/api/v1/residences', { data: { street1: '12 Kungsgatan', city: 'Stockholm', country: 'SE' }, validFrom: '2012-01', validTo: '2019-05' });
+    const res = (await a.call('GET', '/api/v1/data/residences')).items[0];
+    await a.call('POST', '/api/v1/data/residences', { data: { street1: '12 Kungsgatan', city: 'Stockholm', country: 'SE' }, validFrom: '2012-01', validTo: '2019-05' });
     let prof = (await a.call('GET', '/api/v1/owner/fields')).items;
     ok(prof.find((f: any) => f.key === 'address').value.startsWith('2214 SE Ankeny St, Portland, OR 97214') && prof.find((f: any) => f.key === 'country_res').value === 'United States', 'current residence feeds Current address + Country of residence');
     await a.call('PUT', '/api/v1/owner/fields/address', { value: 'elsewhere' }, [409]);
     ok(true, 'derived field refuses direct edits');
-    const cur = (await a.call('GET', '/api/v1/residences?current=true')).items;
+    const cur = (await a.call('GET', '/api/v1/data/residences?current=true')).items;
     ok(cur.length === 1 && cur[0].id === res.id && cur[0].title === '2214 SE Ankeny St, Portland', 'current=true returns the current residence');
-    await a.call('POST', '/api/v1/residences', { data: { street1: 'x' } }, [400]);
-    await a.call('POST', '/api/v1/residences', { data: { street1: 'x', city: 'y', country: 'US', nope: 1 } }, [400]);
-    await a.call('POST', '/api/v1/residences', { data: { street1: 'x', city: 'y', country: 'US' }, validFrom: '2020-01', validTo: '2019-01' }, [400]);
-    await a.call('POST', '/api/v1/financial_accounts', { data: { kind: 'checking', institution: 'Harbor CU', last4: '4111111111111111' } }, [400]);
+    await a.call('POST', '/api/v1/data/residences', { data: { street1: 'x' } }, [400]);
+    await a.call('POST', '/api/v1/data/residences', { data: { street1: 'x', city: 'y', country: 'US', nope: 1 } }, [400]);
+    await a.call('POST', '/api/v1/data/residences', { data: { street1: 'x', city: 'y', country: 'US' }, validFrom: '2020-01', validTo: '2019-01' }, [400]);
+    await a.call('POST', '/api/v1/data/financial_accounts', { data: { kind: 'checking', institution: 'Harbor CU', last4: '4111111111111111' } }, [400]);
     ok(true, 'validation: required parts, unknown parts, date order, last-4 only');
     // Employment with secret pay
-    const job = await a.call('POST', '/api/v1/employment', { data: { employer: 'Alder Studio', title: 'Product designer', city: 'Portland', country: 'US', currentPay: { amount: 120000, currency: 'usd' }, employeeId: 'AS-0042' }, validFrom: '2021-03' });
-    await a.call('POST', '/api/v1/employment', { data: { employer: 'Kiln Co', title: 'Ceramicist' }, validFrom: '2016-01', validTo: '2021-02' });
+    const job = await a.call('POST', '/api/v1/data/employment', { data: { employer: 'Alder Studio', title: 'Product designer', city: 'Portland', country: 'US', currentPay: { amount: 120000, currency: 'usd' }, employeeId: 'AS-0042' }, validFrom: '2021-03' });
+    await a.call('POST', '/api/v1/data/employment', { data: { employer: 'Kiln Co', title: 'Ceramicist' }, validFrom: '2016-01', validTo: '2021-02' });
     ok(job.title === 'Product designer at Alder Studio' && job.masked.includes('currentPay') && job.data.employeeId.startsWith('••••'), 'secret parts are masked');
-    const rev = await a.call('POST', `/api/v1/employment/${job.id}/reveal`, {});
+    const rev = await a.call('POST', `/api/v1/data/employment/${job.id}/reveal`, {});
     ok(rev.data.currentPay.amount === 120000 && rev.data.employeeId === 'AS-0042', 'reveal decrypts secret parts');
-    const upd = await a.call('PATCH', `/api/v1/employment/${job.id}`, { data: { title: 'Design lead', department: 'Product' } });
-    const rev2 = await a.call('POST', `/api/v1/employment/${job.id}/reveal`, {});
+    const upd = await a.call('PATCH', `/api/v1/data/employment/${job.id}`, { data: { title: 'Design lead', department: 'Product' } });
+    const rev2 = await a.call('POST', `/api/v1/data/employment/${job.id}/reveal`, {});
     ok(upd.title === 'Design lead at Alder Studio' && rev2.data.employeeId === 'AS-0042', 'patch keeps untouched secret parts');
-    await a.call('POST', '/api/v1/ids', { data: { kind: 'passport', number: 'P1234567', issuer: 'US', expires: '2031-04' } });
+    await a.call('POST', '/api/v1/data/ids', { data: { kind: 'passport', number: 'P1234567', issuer: 'US', expires: '2031-04' } });
     const tl = (await a.call('GET', '/api/v1/timeline')).items;
     ok(tl.length >= 4 && tl[0].validFrom >= tl[tl.length - 1].validFrom, `timeline merges ${tl.length} dated records`);
     // Custom domain
     const wine = await a.call('POST', '/api/v1/catalog', { label: 'Wine cellar', parts: [{ label: 'Wine', type: 'text', required: true }, { label: 'Vintage', type: 'number' }], dated: false });
-    await a.call('POST', `/api/v1/${wine.id}`, { data: { Wine: 'Willamette Pinot', Vintage: 2018 } });
-    ok(wine.id === 'x_wine_cellar' && (await a.call('GET', `/api/v1/${wine.id}`)).items.length === 1, 'custom category works like a built-in one');
+    await a.call('POST', `/api/v1/data/${wine.id}`, { data: { Wine: 'Willamette Pinot', Vintage: 2018 } });
+    ok(wine.id === 'x_wine_cellar' && (await a.call('GET', `/api/v1/data/${wine.id}`)).items.length === 1, 'custom category works like a built-in one');
     // Scoped app key
     const emp = await a.call('POST', '/api/v1/keys', { name: 'Resume builder', scopes: ['employment:read'] });
     const auth = { headers: { authorization: `Bearer ${emp.secret}` } };
-    ok((await fetch(a.base + '/api/v1/employment', auth)).status === 200 && (await fetch(a.base + '/api/v1/ids', auth)).status === 403, 'employment:read key reads jobs but not IDs');
+    ok((await fetch(a.base + '/api/v1/data/employment', auth)).status === 200 && (await fetch(a.base + '/api/v1/data/ids', auth)).status === 403, 'employment:read key reads jobs but not IDs');
     // Sharing a domain with a connection
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { employment: { scope: 'current' } } });
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { ids: true } }, [409]);
@@ -233,7 +236,7 @@ async function main() {
     detB = await b.call('GET', `/api/v1/contacts/${cB.id}?sync=1`);
     ok(!detB.sharedDomains.length, 'unsharing removes it');
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { education: true } });
-    await a.call('POST', '/api/v1/education', { data: { institution: 'Konstfack', degree: 'MFA' }, validFrom: '2012-09', validTo: '2014-06' });
+    await a.call('POST', '/api/v1/data/education', { data: { institution: 'Konstfack', degree: 'MFA' }, validFrom: '2012-09', validTo: '2014-06' });
     await sleep(3000);
     detB = await b.call('GET', `/api/v1/contacts/${cB.id}`);
     ok(detB.sharedDomains.some((d: any) => d.domain === 'education' && d.records.length === 1), 'grant + edit nudge B to sync without asking');
@@ -269,7 +272,7 @@ async function main() {
     ok((await a.call('GET', '/api/v1/documents?q=wdl123')).items.length === 1, 'text read by the assistant makes the document searchable');
     const accepted = await a.call('POST', `/api/v1/documents/${up.body.id}/suggestions/${sug.suggestions[0].id}/accept`, {});
     ok(accepted.record.domain === 'ids' && accepted.record.source.type === 'app' && accepted.document.status === 'filed' && accepted.document.links[0].recordId === accepted.record.id && !accepted.document.suggestions.length, 'owner accepts: the ID entry is created, linked and the document filed');
-    const idsList = (await a.call('GET', '/api/v1/ids')).items;
+    const idsList = (await a.call('GET', '/api/v1/data/ids')).items;
     ok(idsList.find((r: any) => r.id === accepted.record.id).documents[0].pages.length === 2, 'the ID entry shows its card scan (front and back)');
     // Scopes follow links
     const emp2 = await a.call('POST', '/api/v1/keys', { name: 'Jobs only', scopes: ['employment:read'] });
@@ -285,7 +288,7 @@ async function main() {
     await a.call('DELETE', `/api/v1/documents/${up.body.id}/shares/${share.id}`);
     ok((await fetch(`${a.base}/public/v1/shared/${token}`)).status === 404, 'turning a share link off works at once');
     // Copies for people without a Little Dipper: a snapshot as a link, a file or text in an email
-    const allJobs = (await a.call('GET', '/api/v1/employment')).items;
+    const allJobs = (await a.call('GET', '/api/v1/data/employment')).items;
     await a.call('POST', '/api/v1/copies', { items: [{ domain: 'employment', includeSecret: true }] }, [409]);
     ok(true, 'secret details in a copy need confirmation');
     const cp = await a.call('POST', '/api/v1/copies', { items: [{ domain: 'employment', recordIds: [job.id] }], to: { email: 'Pat.Landlord@example.com', name: 'Pat Okoro' }, delivery: 'link', hours: 168, note: 'For the lease' });
@@ -295,10 +298,10 @@ async function main() {
     const seen = await (await fetch(`${a.base}/public/v1/copies/${cpTok}`)).json();
     ok(seen.title === 'Employment' && seen.categories[0].records.length === 1 && seen.note === 'For the lease', 'the link opens the copy without signing in');
     ok(!seen.categories[0].records[0].fields.some((f: any) => f.key === 'currentPay' || f.key === 'employeeId'), 'secret details stay out unless chosen');
-    await a.call('PATCH', `/api/v1/employment/${job.id}`, { data: { title: 'Studio director' } });
+    await a.call('PATCH', `/api/v1/data/employment/${job.id}`, { data: { title: 'Studio director' } });
     const seen2 = await (await fetch(`${a.base}/public/v1/copies/${cpTok}`)).json();
     ok(seen2.categories[0].records[0].title === 'Design lead at Alder Studio', 'a copy is a snapshot: later edits don’t reach it');
-    await a.call('PATCH', `/api/v1/employment/${job.id}`, { data: { title: 'Design lead' } });
+    await a.call('PATCH', `/api/v1/data/employment/${job.id}`, { data: { title: 'Design lead' } });
     const pdf = await fetch(`${a.base}/public/v1/copies/${cpTok}/download?format=pdf`);
     const pdfBytes = Buffer.from(await pdf.arrayBuffer());
     ok(pdf.headers.get('content-type') === 'application/pdf' && pdfBytes.subarray(0, 5).toString() === '%PDF-' && pdfBytes.subarray(-6).toString().includes('%%EOF'), 'the person with the link can save a PDF');
@@ -323,22 +326,22 @@ async function main() {
     ok((await a.call('GET', '/api/v1/copies')).items.length === 3, 'a copy can be deleted from your history');
     // Receipts: a photo becomes a receipt document linked to the entry
     const soon = new Date(Date.now() + 10 * 86400_000).toISOString().slice(0, 10);
-    const rc1 = await a.call('POST', '/api/v1/receipts', { data: {
+    const rc1 = await a.call('POST', '/api/v1/data/receipts', { data: {
       merchant: 'Blue Bottle', purchased: '2026-10-01', total: { amount: 12.5, currency: 'USD' }, returnBy: soon,
       items: [{ description: 'Latte', quantity: 2, price: { amount: 5, currency: 'USD' } }, { description: '', quantity: '' }, { description: 'Scone', price: { amount: 2.5, currency: 'USD' } }],
     } });
     ok(rc1.title === 'Blue Bottle · $12.50' && rc1.data.items.length === 2, 'receipt with line items (blank rows dropped)');
     const rdoc = (await json(await raw('POST', `/api/v1/documents?name=bluebottle.png&link=receipts:${rc1.id}`, png, 'image/png'))).body;
     ok(rdoc.kind === 'receipt' && rdoc.status === 'filed' && rdoc.links[0].title === 'Blue Bottle · $12.50', 'a receipt photo is filed as a receipt document on that receipt');
-    await a.call('POST', '/api/v1/receipts', { data: { items: [{ quantity: 1 }] } }, [400]);
+    await a.call('POST', '/api/v1/data/receipts', { data: { items: [{ quantity: 1 }] } }, [400]);
     ok(true, 'line items need a description');
     const rk = await a.call('POST', '/api/v1/keys', { name: 'Receipt reader', scopes: ['receipts:read', 'receipts:write'] });
     const asRk = { authorization: `Bearer ${rk.secret}` };
-    const rc2 = await (await fetch(`${a.base}/api/v1/receipts`, { method: 'POST', headers: { ...asRk, 'content-type': 'application/json' }, body: JSON.stringify({ data: { capturedVia: 'assistant', merchant: 'Hardware Co', purchased: '2026-10-15', total: { amount: 89.99, currency: 'USD' } } }) })).json();
+    const rc2 = await (await fetch(`${a.base}/api/v1/data/receipts`, { method: 'POST', headers: { ...asRk, 'content-type': 'application/json' }, body: JSON.stringify({ data: { capturedVia: 'assistant', merchant: 'Hardware Co', purchased: '2026-10-15', total: { amount: 89.99, currency: 'USD' } } }) })).json();
     ok((await raw('POST', `/api/v1/documents?name=hw.png&link=receipts:${rc2.id}`, png, 'image/png', asRk)).status === 201, 'a receipts key can file photos on receipts');
     ok((await raw('POST', '/api/v1/documents?name=loose.png', png, 'image/png', asRk)).status === 403, '…but not put documents in the general library');
     ok((await fetch(`${a.base}/api/v1/files/${up.body.pages[0].id}`, { headers: asRk })).status === 403, "…and can't open the license scan");
-    const list = (await a.call('GET', '/api/v1/receipts')).items;
+    const list = (await a.call('GET', '/api/v1/data/receipts')).items;
     ok(list[0].id === rc2.id && list[1].id === rc1.id && list[1].documents.length === 1, 'receipts are ordered by purchase date, with their photos');
     const att = (await a.call('GET', '/api/v1/attention?days=30')).items;
     ok(att.some((x: any) => x.id === rc1.id && x.part === 'Return by' && x.kind === 'deadline'), 'return-by date shows on Home');
@@ -348,7 +351,7 @@ async function main() {
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { receipts: false } });
     // Deleting an entry deletes documents linked only to it, and unlinks shared ones
     await a.call('PATCH', `/api/v1/documents/${up.body.id}`, { links: [{ domain: 'ids', recordId: accepted.record.id }, { domain: 'receipts', recordId: rc1.id }] });
-    const del1 = await a.call('DELETE', `/api/v1/receipts/${rc1.id}`);
+    const del1 = await a.call('DELETE', `/api/v1/data/receipts/${rc1.id}`);
     ok(del1.documentsDeleted === 1 && (await fetch(`${a.base}/api/v1/files/${rdoc.pages[0].id}`, { headers: asOwner() })).status === 404, 'deleting a receipt deletes its photo');
     ok((await a.call('GET', `/api/v1/documents/${up.body.id}`)).links.length === 1, '…while a document linked elsewhere just loses that link');
     // Export and backups include pages
@@ -364,7 +367,7 @@ async function main() {
     console.log('public profile sections');
     const visitor = new Client(a.base);
     const resumeDoc = (await json(await raw('POST', '/api/v1/documents?name=maya-resume.png&kind=resume', png, 'image/png'))).body;
-    const jobs = (await a.call('GET', '/api/v1/employment')).items;
+    const jobs = (await a.call('GET', '/api/v1/data/employment')).items;
     await a.call('PUT', '/api/v1/public-profile', { sections: [{ type: 'domain', domain: 'employment', parts: ['title', 'currentPay'] }] }, [400]);
     ok(true, 'secret parts can never be public');
     await a.call('PUT', '/api/v1/public-profile', { sections: [{ type: 'domain', domain: 'health' }] }, [400]);

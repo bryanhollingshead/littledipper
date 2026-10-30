@@ -33,7 +33,7 @@ export default function Receipts() {
   const toast = useToast();
   const contacts = useContactsLite();
   const { data: catalog } = useAsync(fetchCatalog, []);
-  const { data, error, reload } = useAsync(() => get<{ items: Rec[] }>(`/api/v1/${DOMAIN}`), []);
+  const { data, error, reload } = useAsync(() => get<{ items: Rec[] }>(`/api/v1/data/${DOMAIN}`), []);
   const [editing, setEditing] = useState<Rec | 'new' | null>(null);
   const [year, setYear] = useState('all');
   const [q, setQ] = useState('');
@@ -68,12 +68,12 @@ export default function Receipts() {
     const made: Rec[] = [];
     for (const f of files) {
       // The receipt first, then its photo filed on it. A failed upload takes the empty receipt with it.
-      const rec = await post<Rec>(`/api/v1/${DOMAIN}`, { data: { capturedVia: 'upload' } }).catch((e) => { toast(`${f.name}: ${(e as Error).message}`); return null; });
+      const rec = await post<Rec>(`/api/v1/data/${DOMAIN}`, { data: { capturedVia: 'upload' } }).catch((e) => { toast(`${f.name}: ${(e as Error).message}`); return null; });
       if (!rec) continue;
       try {
         const doc = await uploadDocument(f, { link: { domain: DOMAIN, recordId: rec.id } });
         made.push({ ...rec, documents: [{ ...doc, links: [{ domain: DOMAIN, recordId: rec.id }] }] });
-      } catch (e) { toast(`${f.name}: ${(e as Error).message}`); await del(`/api/v1/${DOMAIN}/${rec.id}`).catch(() => {}); }
+      } catch (e) { toast(`${f.name}: ${(e as Error).message}`); await del(`/api/v1/data/${DOMAIN}/${rec.id}`).catch(() => {}); }
       setUploading((n) => n - 1);
     }
     reload();

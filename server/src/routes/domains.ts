@@ -1,5 +1,5 @@
 /**
- * Domain endpoints: one per category of personal data (/api/v1/employment, /api/v1/residences…),
+ * Domain endpoints: one per category of personal data (/api/v1/data/employment, /api/v1/data/residences…),
  * plus the catalog that describes them and a cross-domain timeline.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -61,7 +61,7 @@ function catalogEntry(d: DomainDef, sum: Summary) {
     parts: d.parts.map((p) => ({ ...p, sensitivity: partSens(d, p) })),
     ...sum,
     scopes: { read: `${d.id}:read`, write: `${d.id}:write` },
-    endpoint: `/api/v1/${d.id}`,
+    endpoint: `/api/v1/data/${d.id}`,
     feeds: Object.entries(DERIVED).filter(([, v]) => v.domain === d.id).map(([k]) => k),
   };
 }
@@ -148,8 +148,10 @@ export default async function domainRoutes(app: FastifyInstance) {
     return { items };
   });
 
-  // ── per-domain CRUD: /api/v1/{domain} ─────────────────────────────────
-  // Registered last: every fixed /api/v1 route above or elsewhere wins over these parameters.
+  // ── per-domain CRUD: /api/v1/data/{domain} ────────────────────────────
+  // Records have their own prefix, so no fixed route can ever block a domain name.
+  // The older /api/v1/{domain} paths are aliases until beta ships; nothing new should use them.
+  // Registered last: every fixed /api/v1 route above or elsewhere wins over the alias parameters.
   const ctxFor = async (req: FastifyRequest, write: boolean) => {
     const { domain, id } = req.params as { domain: string; id?: string };
     const d = await domainOr404(domain);
@@ -157,67 +159,69 @@ export default async function domainRoutes(app: FastifyInstance) {
     return { d, p, id };
   };
 
-  app.get('/api/v1/:domain', async (req) => {
-    const { d } = await ctxFor(req, false);
-    const q = req.query as { current?: string; from?: string; to?: string };
-    let recs = sortRecords(d, await recordsOf(d.id));
-    if (q.current === 'true') recs = recs.filter((r) => isCurrent(d, r));
-    if (q.from || q.to) recs = recs.filter((r) => inRange(r, q.from, q.to));
-    const docs = await documentsByRecord(d.id);
-    return { domain: d.id, items: recs.map((r) => ({ ...recordOut(d, r), documents: docs.get(r._id) ?? [] })) };
-  });
+  for (const base of ['/api/v1/data/:domain', '/api/v1/:domain']) {
+    app.get(base, async (req) => {
+      const { d } = await ctxFor(req, false);
+      const q = req.query as { current?: string; from?: string; to?: string };
+      let recs = sortRecords(d, await recordsOf(d.id));
+      if (q.current === 'true') recs = recs.filter((r) => isCurrent(d, r));
+      if (q.from || q.to) recs = recs.filter((r) => inRange(r, q.from, q.to));
+      const docs = await documentsByRecord(d.id);
+      return { domain: d.id, items: recs.map((r) => ({ ...recordOut(d, r), documents: docs.get(r._id) ?? [] })) };
+    });
 
-  app.post('/api/v1/:domain', async (req, reply) => {
-    const { d, p } = await ctxFor(req, true);
-    const rec = await buildRecord(d, (req.body || {}) as RecordInput, null, { type: p.isSession ? 'owner' : 'app', id: p.key._id });
-    await ctx.store.insert('records', rec);
-    await demoteOtherPrimaries(rec);
-    await syncDerived(d.id);
-    const out = recordOut(d, rec);
-    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
-    await audit({ actor: ownerActor(p.key._id), action: 'record.create', resource: `${d.id}/${rec._id}`, text: `${p.isSession ? 'You' : 'An app'} added ${out.title} to ${d.label}`, tone: 'owner' });
-    reply.code(201);
-    return out;
-  });
+    app.post(base, async (req, reply) => {
+      const { d, p } = await ctxFor(req, true);
+      const rec = await buildRecord(d, (req.body || {}) as RecordInput, null, { type: p.isSession ? 'owner' : 'app', id: p.key._id });
+      await ctx.store.insert('records', rec);
+      await demoteOtherPrimaries(rec);
+      await syncDerived(d.id);
+      const out = recordOut(d, rec);
+      nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+      await audit({ actor: ownerActor(p.key._id), action: 'record.create', resource: `${d.id}/${rec._id}`, text: `${p.isSession ? 'You' : 'An app'} added ${out.title} to ${d.label}`, tone: 'owner' });
+      reply.code(201);
+      return out;
+    });
 
-  app.get('/api/v1/:domain/:id', async (req) => {
-    const { d, id } = await ctxFor(req, false);
-    const r = await recordOr404(d, id!);
-    return { ...recordOut(d, r), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
-  });
+    app.get(`${base}/:id`, async (req) => {
+      const { d, id } = await ctxFor(req, false);
+      const r = await recordOr404(d, id!);
+      return { ...recordOut(d, r), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
+    });
 
-  app.patch('/api/v1/:domain/:id', async (req) => {
-    const { d, p, id } = await ctxFor(req, true);
-    const existing = await recordOr404(d, id!);
-    const rec = await buildRecord(d, (req.body || {}) as RecordInput, existing, existing.source);
-    const { _id, ...rest } = rec;
-    // Replace data wholesale so removed parts really go.
-    await ctx.store.update('records', _id, { ...rest });
-    await demoteOtherPrimaries(rec);
-    await syncDerived(d.id);
-    const out = recordOut(d, rec);
-    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
-    await audit({ actor: ownerActor(p.key._id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${p.isSession ? 'You' : 'An app'} updated ${out.title} in ${d.label}`, tone: 'owner' });
-    return out;
-  });
+    app.patch(`${base}/:id`, async (req) => {
+      const { d, p, id } = await ctxFor(req, true);
+      const existing = await recordOr404(d, id!);
+      const rec = await buildRecord(d, (req.body || {}) as RecordInput, existing, existing.source);
+      const { _id, ...rest } = rec;
+      // Replace data wholesale so removed parts really go.
+      await ctx.store.update('records', _id, { ...rest });
+      await demoteOtherPrimaries(rec);
+      await syncDerived(d.id);
+      const out = recordOut(d, rec);
+      nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+      await audit({ actor: ownerActor(p.key._id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${p.isSession ? 'You' : 'An app'} updated ${out.title} in ${d.label}`, tone: 'owner' });
+      return out;
+    });
 
-  app.delete('/api/v1/:domain/:id', async (req) => {
-    const { d, p, id } = await ctxFor(req, true);
-    const r = await recordOr404(d, id!);
-    const title = recordOut(d, r).title;
-    await ctx.store.remove('records', r._id);
-    const docsDeleted = await recordRemoved(r._id);
-    await syncDerived(d.id);
-    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
-    await audit({ actor: ownerActor(p.key._id), action: 'record.delete', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} removed ${title} from ${d.label}`, tone: 'owner' });
-    return { deleted: true, documentsDeleted: docsDeleted };
-  });
+    app.delete(`${base}/:id`, async (req) => {
+      const { d, p, id } = await ctxFor(req, true);
+      const r = await recordOr404(d, id!);
+      const title = recordOut(d, r).title;
+      await ctx.store.remove('records', r._id);
+      const docsDeleted = await recordRemoved(r._id);
+      await syncDerived(d.id);
+      nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+      await audit({ actor: ownerActor(p.key._id), action: 'record.delete', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} removed ${title} from ${d.label}`, tone: 'owner' });
+      return { deleted: true, documentsDeleted: docsDeleted };
+    });
 
-  app.post('/api/v1/:domain/:id/reveal', async (req) => {
-    const { d, p, id } = await ctxFor(req, false);
-    const r = await recordOr404(d, id!);
-    const out = recordOut(d, r, { reveal: true });
-    await audit({ actor: ownerActor(p.key._id), action: 'record.reveal', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} revealed ${recordOut(d, r).title} (${d.label})`, tone: 'owner', ip: req.ip });
-    return out;
-  });
+    app.post(`${base}/:id/reveal`, async (req) => {
+      const { d, p, id } = await ctxFor(req, false);
+      const r = await recordOr404(d, id!);
+      const out = recordOut(d, r, { reveal: true });
+      await audit({ actor: ownerActor(p.key._id), action: 'record.reveal', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} revealed ${recordOut(d, r).title} (${d.label})`, tone: 'owner', ip: req.ip });
+      return out;
+    });
+  }
 }

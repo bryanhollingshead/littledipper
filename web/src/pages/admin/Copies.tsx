@@ -47,7 +47,7 @@ export function SendCopy({ catalog, start, contact, onClose, onSent }: { catalog
   const addDomain = async (id: string) => {
     const d = catalog.find((x) => x.id === id);
     if (!d || picks[id]) return;
-    const r = await run(() => get<{ items: Rec[] }>(`/api/v1/${id}`));
+    const r = await run(() => get<{ items: Rec[] }>(`/api/v1/data/${id}`));
     if (!r) return;
     setPicks((p) => ({ ...p, [id]: { records: r.items, chosen: r.items.map((x) => x.id), includeSecret: d.sensitivity === 'secret' } }));
     setOrder((o) => (o.includes(id) ? o : [...o, id]));

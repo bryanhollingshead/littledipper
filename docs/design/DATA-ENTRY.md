@@ -4,7 +4,7 @@
 
 ## Problem
 
-Several domains need a lot of clicking and navigating to fill in. Every record goes through the same side panel, one at a time: open the domain, **Add**, fill in the main fields, expand **More details**, set dates, save, repeat. The panel is `RecordEditor` in `web/src/life.tsx`. There are 24 domains. Entering ten years of residences or a full work history means dozens of round-trips through the panel. The API has the same limit: one record per `POST /api/v1/{domain}`.
+Several domains need a lot of clicking and navigating to fill in. Every record goes through the same side panel, one at a time: open the domain, **Add**, fill in the main fields, expand **More details**, set dates, save, repeat. The panel is `RecordEditor` in `web/src/life.tsx`. There are 24 domains. Entering ten years of residences or a full work history means dozens of round-trips through the panel. The API has the same limit: one record per `POST /api/v1/data/{domain}`.
 
 Both humans and AIs will fill in much of this data, so data-entry UX needs serious design attention.
 

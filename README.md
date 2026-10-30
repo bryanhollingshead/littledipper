@@ -72,7 +72,7 @@ The smoke test starts two instances, claims both with a software passkey, then r
 
 ## Data model: domains
 
-Personal data is organised into **domains**, one per category. Each domain has its own endpoint (`/api/v1/{domain}`), its own grant in the contact admin and its own app-key scopes (`{domain}:read`, `{domain}:write`; `records:read`/`records:write` cover every domain).
+Personal data is organised into **domains**, one per category. Each domain has its own endpoint (`/api/v1/data/{domain}`), its own grant in the contact admin and its own app-key scopes (`{domain}:read`, `{domain}:write`; `records:read`/`records:write` cover every domain).
 
 | Group | Domains |
 |---|---|

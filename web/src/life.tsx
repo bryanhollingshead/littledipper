@@ -309,7 +309,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
     }
     const body = { data, notes, ...(d.dated ? { validFrom: from || null, validTo: current ? null : to || null } : {}) };
     try {
-      const saved = rec ? await patch<Rec>(`/api/v1/${d.id}/${rec.id}`, body) : await post<Rec>(`/api/v1/${d.id}`, body);
+      const saved = rec ? await patch<Rec>(`/api/v1/data/${d.id}/${rec.id}`, body) : await post<Rec>(`/api/v1/data/${d.id}`, body);
       // Documents picked before the entry existed go up now, filed on it.
       for (const f of pending) await uploadDocument(f, { link: { domain: d.id, recordId: saved.id } }).catch((e) => setError(`${f.name}: ${(e as Error).message}`));
       onSaved(saved);
@@ -320,7 +320,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
 
   const remove = () => setConfirm({
     title: `Delete this ${d.noun}?`, body: `${rec!.title} is removed from your Little Dipper and from anyone you share ${d.label} with.${docs.some((x) => x.links.length === 1) ? ' Documents filed only on it are deleted too.' : ''}`, cta: 'Delete',
-    onConfirm: async () => { if (await run(() => del(`/api/v1/${d.id}/${rec!.id}`))) onSaved(); },
+    onConfirm: async () => { if (await run(() => del(`/api/v1/data/${d.id}/${rec!.id}`))) onSaved(); },
   });
 
   const field = (p: Part) => (

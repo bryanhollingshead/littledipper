@@ -4,7 +4,7 @@
 
 ## Built (first version)
 
-- **The `receipts` domain** (Money group): `/api/v1/receipts`, `receipts:read` and `receipts:write` scopes, contact grants. **No part is required:** a photo alone is a receipt, and the details can be filled in later by hand or by an assistant.
+- **The `receipts` domain** (Money group): `/api/v1/data/receipts`, `receipts:read` and `receipts:write` scopes, contact grants. **No part is required:** a photo alone is a receipt, and the details can be filled in later by hand or by an assistant.
 - **A new `list` part type in the domain engine:** rows of sub-parts. Receipts use it for line items (item, quantity, price, product code). Up to 200 rows; blank rows are dropped.
 - **Photos and PDFs are documents** ([DOCUMENTS.md](DOCUMENTS.md)) of kind `receipt`, linked to the receipt. Deleting the receipt deletes its photo. Contacts a receipt is shared with get the details and line items, not the photos (yet).
 - **Return-by and warranty-until** are `remind` dates: they appear on Home and in My data's "Coming up", then drop off two weeks after they pass.
@@ -29,7 +29,7 @@
 
 **Start with raw data only. Add smarts later.** Capture the receipt and its basic details. Links to other categories (Property & valuables, tax returns, insurance), analysis and spending reports all come later.
 
-- **A built-in domain, `receipts`.** It automatically gets `/api/v1/receipts` endpoints, `receipts:read` and `receipts:write` scopes, contact grants and the table entry view.
+- **A built-in domain, `receipts`.** It automatically gets `/api/v1/data/receipts` endpoints, `receipts:read` and `receipts:write` scopes, contact grants and the table entry view.
 - **Each receipt can have a file attached**, a photo or PDF stored through the documents module.
 - **Return-by and warranty-until dates** feed the Home "needs attention" list, as expiring IDs already do.
 
