@@ -1,6 +1,6 @@
 # Backups: keeping a life's records safe
 
-> **Status: device backups built** (2026-10-30): nightly encrypted backups on the node, one-file backups saved to the owner's device (download, or automatically to a folder they choose), weekly reminders, and restore from a file on new hardware. Other destinations are options for later, below.
+> **Status: device backups built** (2026-10-30): nightly encrypted backups on the node, one-file backups saved to the owner's device (download, or automatically to a folder they choose), weekly reminders, and restore on a new server from the setup screen. Other destinations are options for later, below.
 
 If people own their data, a dead disk, a closed hosting account or a lost server can't mean losing their records. Backups have to leave the node, and doing so has to be easy enough that people actually do it.
 
@@ -31,10 +31,14 @@ If people own their data, a dead disk, a closed hosting account or a lost server
 
 ### Restoring on new hardware
 
-1. Install Little Dipper on the new server, without starting it.
-2. `little-dipper restore-kit <file.ldkit>` brings back the identity (it asks for the kit's passphrase).
-3. `little-dipper restore-backup <file.ldbackup>` brings back everything else: data and document files. It refuses if the backup belongs to a different node, or if the node already has an owner.
-4. Start the server and sign in as before. Contacts find the node at its new address once it sends an address-change notice.
+**From the setup screen** (no command line): install Little Dipper on the new server and open its claim link as if setting it up. Under *Set up Little Dipper*, choose **Restore from a backup**, pick the recovery kit (`.ldkit`), type its passphrase, and pick a backup (`.ldbackup`).
+
+- **Every check runs before anything is written:** the claim link, the kit's passphrase, that the kit and the backup belong to the same node, and that the backup decrypts. If any fails, the new server stays exactly as it was and says why.
+- Then the server takes the kit's identity, the backup's data and document files, and its own address, which it records in the address history. It takes a fresh backup of itself.
+- **Connections reconnect on their own:** each one is sent an address-change notice and keeps working without a new invite.
+- **The owner is signed in straight away.** Passkeys belong to a web address, so the old one won't work at a new address. The last screen offers to add one, and recovery codes from before still work.
+
+**From the command line**, for a server you run yourself: `little-dipper restore-kit <file.ldkit>` (asks for the passphrase), then `little-dipper restore-backup <file.ldbackup>`, then start the server. The `restore-backup` command refuses a backup from a different node, and refuses a node that already has an owner.
 
 The recovery kit is the real point of failure. Without the kit and its passphrase, every backup, wherever it is, stays unreadable. Settings says so wherever backups are explained.
 
@@ -46,6 +50,7 @@ Session only (the owner's browser): backups hold everything.
 - `POST /api/v1/node/backups` → a new backup
 - `GET /api/v1/node/backups/{id}/download?via=download|folder` → the `.ldbackup` file; records the device copy
 - `POST /api/v1/node/backups/{id}/restore` → restore on this node
+- `POST /api/v1/node/claim/restore` `{ token, kit, passphrase, backup }` → restore onto a fresh, unclaimed node (claim link required; errors: `wrong_passphrase`, `not_a_kit`, `not_a_backup`, `backup_mismatch`, `backup_unreadable`)
 - `GET /api/v1/node` → includes `deviceBackup: { lastAt, via, remindAfterDays, due }`
 
 ## Options for later
@@ -64,7 +69,6 @@ Also for later:
 
 - **How often:** nightly plus "Back up now" is enough for data that changes a few times a day. Streaming every change (Litestream to S3) loses minutes instead of a day, but adds a second program to every install.
 - **Keeping the kit safe:** a printable paper kit with a QR code; splitting the key among trusted contacts so that, say, any 3 of 5 can restore it.
-- **Restoring from the setup screen:** a fresh node offering "Restore from a backup" next to claiming, so new hardware needs no command line (BRY-39).
 
 ## Still open
 

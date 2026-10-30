@@ -2,9 +2,11 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync,
 import path from 'node:path';
 import { config } from './config.js';
 import { ctx } from './ctx.js';
-import { decrypt, encrypt, newId, nodeIdFromPublicKey } from './crypto.js';
+import { decrypt, decryptWithPassphrase, encrypt, newId, nodeIdFromPublicKey } from './crypto.js';
+import { saveKeystore } from './keystore.js';
+import type { Keystore } from './ctx.js';
 import { audit, systemActor } from './audit.js';
-import { getNode } from './node.js';
+import { getNode, reconcileHost } from './node.js';
 import type { Doc } from './store/index.js';
 
 export type BackupDoc = Doc & {
@@ -121,17 +123,63 @@ export function deviceCopyStatus(n: { lastDeviceCopyAt?: string | null; lastDevi
  * that node's master key can read it.
  */
 export async function restoreBundle(raw: string) {
-  let bundle: BackupBundle;
-  try { bundle = JSON.parse(raw); } catch { throw new Error('This isn’t a Little Dipper backup file.'); }
-  if (bundle?.format !== 'ldbackup' || typeof bundle.data !== 'string') throw new Error('This isn’t a Little Dipper backup file.');
-  const ks = ctx.keys;
-  if (nodeIdFromPublicKey(ks.signing.publicKey) !== bundle.nodeId) throw new Error(`This backup belongs to ${bundle.nodeId}. Restore that node's recovery kit first.`);
-  let data: Record<string, Doc[]>;
-  try { ({ data } = JSON.parse(decrypt(ks.masterKey, bundle.data)) as { data: Record<string, Doc[]> }); } catch { throw new Error('This backup can’t be read with this node’s key.'); }
+  const { bundle, data } = openBundle(raw, ctx.keys);
   const keep = await ctx.store.dump();
   await ctx.store.restore({ ...data, backups: keep.backups, challenges: [] });
+  return putBundleFiles(bundle);
+}
+
+/** A problem with what the owner handed in; nothing has been changed when one is thrown. */
+export class RestoreError extends Error {
+  constructor(public code: string, message: string) { super(message); }
+}
+
+/** Read and check a .ldbackup file against a node's keys. Changes nothing. */
+function openBundle(raw: string, keys: Keystore) {
+  let bundle: BackupBundle;
+  try { bundle = JSON.parse(raw); } catch { throw new RestoreError('not_a_backup', 'That file isn’t a Little Dipper backup.'); }
+  if (bundle?.format !== 'ldbackup' || typeof bundle.data !== 'string') throw new RestoreError('not_a_backup', 'That file isn’t a Little Dipper backup.');
+  if (nodeIdFromPublicKey(keys.signing.publicKey) !== bundle.nodeId) throw new RestoreError('backup_mismatch', 'This backup belongs to a different Little Dipper than the recovery kit.');
+  let data: Record<string, Doc[]>;
+  try { ({ data } = JSON.parse(decrypt(keys.masterKey, bundle.data)) as { data: Record<string, Doc[]> }); } catch { throw new RestoreError('backup_unreadable', 'This backup can’t be read with the recovery kit’s key. It may be damaged.'); }
+  if (!data || typeof data !== 'object' || !Array.isArray(data.nodes)) throw new RestoreError('backup_unreadable', 'This backup is incomplete.');
+  return { bundle, data };
+}
+
+async function putBundleFiles(bundle: BackupBundle) {
   for (const [id, b64] of Object.entries(bundle.blobs ?? {})) await ctx.store.putBlob(id, Buffer.from(b64, 'base64'));
   return { at: bundle.at, documents: bundle.documents, files: Object.keys(bundle.blobs ?? {}).length };
+}
+
+/** The kit settings Little Dipper writes. Anything else is refused, so a crafted kit can't ask scrypt for unbounded work. */
+const KIT_KDF = { N: 1 << 15, r: 8, p: 1 };
+
+/** Open a recovery kit with its passphrase. Changes nothing. */
+export function openKit(kit: unknown, passphrase: string): Keystore & { nodeId: string } {
+  const k = kit as { format?: string; nodeId?: string; kdf?: string; N?: number; r?: number; p?: number; salt?: string; data?: string };
+  if (k?.format !== 'ldkit' || typeof k.salt !== 'string' || typeof k.data !== 'string' || typeof k.nodeId !== 'string') throw new RestoreError('not_a_kit', 'That file isn’t a Little Dipper recovery kit.');
+  if (k.kdf !== 'scrypt' || k.N !== KIT_KDF.N || k.r !== KIT_KDF.r || k.p !== KIT_KDF.p) throw new RestoreError('not_a_kit', 'That recovery kit uses settings this Little Dipper doesn’t accept.');
+  let secret: { signing: Keystore['signing']; masterKey: string };
+  try { secret = JSON.parse(decryptWithPassphrase(passphrase, k as { salt: string; N: number; r: number; p: number; data: string })); } catch { throw new RestoreError('wrong_passphrase', 'That passphrase doesn’t open this recovery kit.'); }
+  if (nodeIdFromPublicKey(secret.signing.publicKey) !== k.nodeId) throw new RestoreError('not_a_kit', 'This recovery kit is damaged: its key doesn’t match its ID.');
+  return { signing: secret.signing, masterKey: secret.masterKey, nodeId: k.nodeId };
+}
+
+/**
+ * Bring a node back onto a fresh, unclaimed Little Dipper from its recovery kit and a .ldbackup
+ * file. Everything is checked before anything is written: a wrong passphrase, a damaged file or a
+ * kit and backup from different nodes leave this node exactly as it was. Then the node takes the
+ * kit's identity, the backup's data and files, and this server's address.
+ */
+export async function restoreOnFreshNode(kit: unknown, passphrase: string, raw: string) {
+  const keys = openKit(kit, passphrase);
+  const { bundle, data } = openBundle(raw, keys);
+  await ctx.store.restore({ ...data, backups: [], challenges: [] });
+  await saveKeystore(ctx.store, { signing: keys.signing, masterKey: keys.masterKey });
+  ctx.keys = { signing: keys.signing, masterKey: keys.masterKey };
+  const files = await putBundleFiles(bundle);
+  const moved = await reconcileHost(await getNode(), { hosting: true });
+  return { ...files, nodeId: keys.nodeId, moved };
 }
 
 /** Nightly at 03:00 server time. */

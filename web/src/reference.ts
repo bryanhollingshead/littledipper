@@ -6,6 +6,7 @@ export const ENDPOINTS: Endpoint[] = ([
   ['Node', 'GET', '/api/v1/node/status', 'public', '{ claimed } and install facts, used by the setup page.'],
   ['Node', 'POST', '/api/v1/node/claim', 'claim', 'Exchange a one-time claim token for a 1-hour setup session.'],
   ['Node', 'POST', '/api/v1/node/claim/complete', 'claim', 'Finish setup: deletes the claim token, seeds fields, starts the owner session.'],
+  ['Node', 'POST', '/api/v1/node/claim/restore', 'claim', 'Instead of setup: { token, kit, passphrase, backup } turns a fresh node into the owner’s old one (identity, data, files), records the new address, tells connections, takes a backup and starts the owner session. Nothing changes unless every check passes.'],
   ['Node', 'GET', '/api/v1/node', 'owner', 'Addresses, hosting, version, update channel.', 'owner:read'],
   ['Node', 'PATCH', '/api/v1/node', 'session', 'Add or remove a custom domain.'],
   ['Node', 'POST', '/api/v1/node/domain/check', 'session', 'Check DNS + reachability; switches the canonical address and notifies peers.'],

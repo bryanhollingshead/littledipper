@@ -105,6 +105,9 @@ function cli(dir: string, args: string[], input = '') {
   return execFileSync('npx', ['tsx', 'src/cli.ts', ...args], { cwd: path.resolve(import.meta.dirname, '..'), env: { ...process.env, LD_DATA_DIR: dir }, input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
 }
 
+/** How many records a node's database holds (read-only, safe while it runs). */
+const countRecords = (dir: string) => { const db = new Database(path.join(dir, 'little-dipper.db'), { readonly: true }); const n = (db.prepare('SELECT COUNT(*) AS n FROM records').get() as { n: number }).n; db.close(); return n; };
+
 /** Turn a stopped node's SQLite database back into the JSON store.json nodes had before SQLite. */
 function toJsonStore(dir: string) {
   const file = path.join(dir, 'little-dipper.db');
@@ -121,6 +124,7 @@ async function main() {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'ld-smoke-'));
   const [A, firstB] = await Promise.all([startNode(4201, path.join(tmp, 'a'), { LD_BIG_DIPPER_URL: 'http://localhost:4202' }), startNode(4202, path.join(tmp, 'b'))]);
   let B = firstB; // restarted mid-test to check offline delivery
+  const extra: ChildProcess[] = []; // nodes started later in the run, stopped even if a check fails
   const a = new Client('http://localhost:4201'), b = new Client('http://localhost:4202');
   const ka = new SoftKey(), kb = new SoftKey();
   try {
@@ -553,6 +557,7 @@ async function main() {
     ok(refused && !existsSync(path.join(tmp, 'c', 'keystore.json')), 'a wrong recovery-kit passphrase restores nothing');
     cli(path.join(tmp, 'c'), ['restore-kit', kitFile], 'correct horse battery\n');
     const C = await startNode(4203, path.join(tmp, 'c'));
+    extra.push(C.proc);
     await new Promise((r) => { C.proc.once('exit', r); C.proc.kill(); });
     const idOf = (dir: string) => JSON.parse(cli(dir, ['status'])).nodeId;
     ok(idOf(path.join(tmp, 'c')) === idOf(path.join(tmp, 'a')) && idOf(path.join(tmp, 'a')) === kit.nodeId, 'the recovery kit brings back the same node identity on new hardware');
@@ -567,17 +572,55 @@ async function main() {
     cli(fresh, ['restore-kit', kitFile], 'correct horse battery\n');
     const said = cli(fresh, ['restore-backup', bundleFile]);
     const E = await startNode(4204, fresh);
+    extra.push(E.proc);
     const statusE = await (await fetch('http://localhost:4204/api/v1/node/status')).json();
     await new Promise((r) => { E.proc.once('exit', r); E.proc.kill(); });
-    const countRecords = (dir: string) => { const db = new Database(path.join(dir, 'little-dipper.db'), { readonly: true }); const n = (db.prepare('SELECT COUNT(*) AS n FROM records').get() as { n: number }).n; db.close(); return n; };
     ok(said.includes('Restored the backup') && statusE.claimed && idOf(fresh) === kit.nodeId && countRecords(fresh) > 0 && countRecords(fresh) === countRecords(path.join(tmp, 'a')), 'kit + backup file bring the whole node back on new hardware');
     let refusedAgain = false;
     try { cli(fresh, ['restore-backup', bundleFile]); } catch { refusedAgain = true; }
     ok(refusedAgain, 'restoring a file over a node that already has an owner is refused');
     ok(Object.keys(bundle.blobs).length > 0 && Object.keys(bundle.blobs).every((id) => existsSync(path.join(fresh, 'blobs', id))), `document files travel in the backup file and come back (${Object.keys(bundle.blobs).length})`);
+    console.log('restore on a new server');
+    // A and B connect again, so the restore can show a live connection surviving the move.
+    // (A's request from the Big Dipper step is still waiting on B, which plays Big Dipper here.)
+    const req2 = (await b.call('GET', '/api/v1/federation/requests?status=pending&direction=in')).items.find((r: any) => r.peerName === 'Maya Lindqvist');
+    await b.call('POST', `/api/v1/federation/requests/${req2._id}/accept`, {});
+    await sleep(700);
+    const mayaOnB = (await b.call('GET', '/api/v1/contacts')).items.find((c: any) => c.status === 'active' && c.displayName === 'Maya Lindqvist');
+    ok(mayaOnB, 'A and B are connected again');
+    const bkR = await a.call('POST', '/api/v1/node/backups');
+    const bundleR = JSON.stringify(await a.call('GET', `/api/v1/node/backups/${bkR._id ?? bkR.id}/download`));
+    const recordsOnA = countRecords(path.join(tmp, 'a'));
+    const bkB = await b.call('POST', '/api/v1/node/backups');
+    const bundleB = JSON.stringify(await b.call('GET', `/api/v1/node/backups/${bkB._id ?? bkB.id}/download`));
+    await new Promise((r) => { A.proc.once('exit', r); A.proc.kill(); }); // A's server is gone
+    const F = await startNode(4205, path.join(tmp, 'f'));
+    extra.push(F.proc);
+    const f = new Client('http://localhost:4205');
+    const fToken = new URL(F.claimUrl).searchParams.get('token');
+    const wrong = await f.call('POST', '/api/v1/node/claim/restore', { token: fToken, kit, passphrase: 'not the passphrase', backup: bundleR }, [400]);
+    ok(wrong.code === 'wrong_passphrase' && !(await f.call('GET', '/api/v1/node/status')).claimed, 'a wrong passphrase is refused and the fresh node is unchanged');
+    const mismatch = await f.call('POST', '/api/v1/node/claim/restore', { token: fToken, kit, passphrase: 'correct horse battery', backup: bundleB }, [400]);
+    ok(mismatch.code === 'backup_mismatch' && !(await f.call('GET', '/api/v1/node/status')).claimed, "another node's backup is refused, nothing changed");
+    const junk = await f.call('POST', '/api/v1/node/claim/restore', { token: fToken, kit, passphrase: 'correct horse battery', backup: '{"hello":1}' }, [400]);
+    ok(junk.code === 'not_a_backup', 'a file that isn’t a backup is refused');
+    await f.call('POST', '/api/v1/node/claim/restore', { token: 'ct_wrong', kit, passphrase: 'correct horse battery', backup: bundleR }, [401]);
+    ok(true, 'restoring needs the claim link, like claiming');
+    const restoredF = await f.call('POST', '/api/v1/node/claim/restore', { token: fToken, kit, passphrase: 'correct horse battery', backup: bundleR });
+    ok(restoredF.restored && restoredF.nodeId === kit.nodeId && restoredF.address === 'http://localhost:4205' && restoredF.files > 0, `the fresh node becomes Maya's Little Dipper at its new address (${restoredF.files} files)`);
+    ok((await f.call('GET', '/api/v1/owner')).displayName === 'Maya Lindqvist' && countRecords(path.join(tmp, 'f')) === recordsOnA, 'the owner is signed in, with every record back');
+    await f.call('POST', '/api/v1/node/claim/restore', { token: fToken, kit, passphrase: 'correct horse battery', backup: bundleR }, [401, 409]);
+    ok(true, 'a node that was restored can’t be restored over again');
+    let heard = false;
+    for (let i = 0; i < 20 && !heard; i++) { await sleep(250); heard = (await b.call('GET', `/api/v1/contacts/${mayaOnB.id}`)).node?.url === 'localhost:4205'; }
+    ok(heard, "B learns Maya's new address without a new invite");
+    const hello = await b.call('POST', `/api/v1/messages/conversations/${mayaOnB.id}`, { body: 'Welcome back' });
+    ok(hello.status === 'delivered' && (await f.call('GET', '/api/v1/messages/unread')).count >= 1, 'and B can message the restored node straight away');
+    await new Promise((r) => { F.proc.once('exit', r); F.proc.kill(); });
     console.log('\nAll good.');
   } finally {
     A.proc.kill(); B.proc.kill();
+    for (const p of extra) p.kill();
     rmSync(tmp, { recursive: true, force: true });
   }
 }

@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { startRegistration } from '@simplewebauthn/browser';
 import { addr, get, post, saveFile } from '../api';
 import { Brand, Circle, Loading, Pills, useToast } from '../ui';
+import RestoreFromBackup from './Restore';
 
 type Status = { claimed: boolean; version: string; address: string; hosting: { label: string; region: string }; storage: string };
 type HostTab = 'render' | 'docker' | 'vps' | 'home';
@@ -50,6 +51,7 @@ export default function Setup() {
   const [codes, setCodes] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const tried = useRef(false);
 
   useEffect(() => {
@@ -86,7 +88,6 @@ export default function Setup() {
       const r = await post<{ mode: 'claim' | 'transfer' }>('/api/v1/node/claim', { token: claimInput });
       setMode(r.mode);
       setVerified('yes');
-      setStep(1);
     } catch {
       setClaimError(true);
     } finally {
@@ -146,9 +147,11 @@ export default function Setup() {
       <Circle style={{ right: 120, top: 260, width: 160, height: 160, background: 'var(--color-accent-200)', opacity: 0.8 }} />
       <div style={{ position: 'relative', maxWidth: 640 }}>
         <div style={{ marginBottom: 36 }}><Brand name={brand} /></div>
-        {step > 0 && <StepPills step={step} />}
+        {step > 0 && !restoring && <StepPills step={step} />}
 
-        {step === 0 && verified === 'yes' && (
+        {restoring && <RestoreFromBackup token={token || claimInput} nodeAddr={nodeAddr} onBack={() => setRestoring(false)} />}
+
+        {!restoring && step === 0 && verified === 'yes' && (
           <>
             <span className="tag tag-accent-2">{mode === 'transfer' ? 'Transfer link verified' : 'Claim link verified'}</span>
             <h1 style={{ marginTop: 14, fontSize: 48, textWrap: 'pretty' }}>{mode === 'transfer' ? 'This Little Dipper is being handed to you.' : "Your Little Dipper is ready. Let's make it yours."}</h1>
@@ -166,10 +169,19 @@ export default function Setup() {
               <button className="btn btn-primary" onClick={() => setStep(1)} style={{ fontSize: 16, padding: '12px 26px' }}>Set up Little Dipper</button>
               <span className="text-muted" style={{ fontSize: 13 }}>This link works once and expires 1 hour after it was created.</span>
             </div>
+            {mode === 'claim' && (
+              <div className="card" style={{ marginTop: 28, padding: '18px 22px', gap: 6, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', background: 'var(--color-neutral-100)' }}>
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <div className="card-title">Coming back from a backup?</div>
+                  <div className="text-muted" style={{ fontSize: 13 }}>If you had a Little Dipper before, bring it back here with your recovery kit and a backup file.</div>
+                </div>
+                <button className="btn btn-secondary" onClick={() => setRestoring(true)}>Restore from a backup</button>
+              </div>
+            )}
           </>
         )}
 
-        {step === 0 && verified === 'no' && (
+        {!restoring && step === 0 && verified === 'no' && (
           <>
             <span className="tag tag-accent">Not set up yet</span>
             <h1 style={{ marginTop: 14, fontSize: 44, textWrap: 'pretty' }}>This Little Dipper is waiting for its owner.</h1>

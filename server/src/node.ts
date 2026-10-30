@@ -96,6 +96,26 @@ export async function attachNode() {
   return n;
 }
 
+/**
+ * Bring the node's record in line with where it is running now: this release's version and this
+ * host's address (kept in the address history). Returns the old address if it moved, so the
+ * caller can tell connections. Used on every boot and after a node is restored onto a new server.
+ */
+export async function reconcileHost(n: NodeDoc, opts: { hosting?: boolean } = {}): Promise<string | null> {
+  const now = new Date().toISOString();
+  const patch: Partial<NodeDoc> = {};
+  if (n.version !== VERSION) patch.version = VERSION;
+  if (opts.hosting) patch.hosting = { provider: config.hosting.provider, region: config.hosting.region };
+  let moved: string | null = null;
+  if (n.addresses.host !== config.hostUrl) {
+    moved = n.addresses.host;
+    patch.addresses = { ...n.addresses, host: config.hostUrl };
+    patch.addressHistory = [...n.addressHistory.map((h) => (h.to ? h : { ...h, to: now })), { address: config.hostUrl, from: now, to: null }];
+  }
+  if (Object.keys(patch).length) await ctx.store.update('nodes', n._id, patch);
+  return moved;
+}
+
 /** First boot: create the permanent identity. Every boot: reconcile the host address. */
 export async function bootNode(log: (msg: string) => void) {
   let ks = await loadKeystore(ctx.store);
@@ -122,15 +142,7 @@ export async function bootNode(log: (msg: string) => void) {
   } else if (n._id !== nodeId) {
     throw new Error(`Keystore (${nodeId}) does not match this database (${n._id}).`);
   }
-  const patch: Partial<NodeDoc> = {};
-  if (n.version !== VERSION) patch.version = VERSION;
-  let moved: string | null = null;
-  if (n.addresses.host !== config.hostUrl) {
-    moved = n.addresses.host;
-    patch.addresses = { ...n.addresses, host: config.hostUrl };
-    patch.addressHistory = [...n.addressHistory.map((h) => (h.to ? h : { ...h, to: now })), { address: config.hostUrl, from: now, to: null }];
-  }
-  if (Object.keys(patch).length) await ctx.store.update('nodes', n._id, patch);
+  const moved = await reconcileHost(n);
 
   if (!n.claimed) {
     // An installer may pre-generate the token (e.g. Render's generateValue) and open /claim?token=… itself.

@@ -6,7 +6,7 @@ import { fingerprint, encryptWithPassphrase, decrypt, isEncrypted } from '../cry
 import { audit, ownerActor, systemActor } from '../audit.js';
 import { bad, COOKIE, cookieOpts, HttpError, issueKey, rateLimit, requireOwner, requireSession, requireSetup, startSession, deviceLabel } from '../auth.js';
 import { canonicalUrl, checkClaimToken, descriptor, displayAddr, getNode, issueClaimLink, type NodeDoc } from '../node.js';
-import { backupBundle, createBackup, deviceCopyStatus, listBackups, markDeviceCopy, restoreBackup } from '../backups.js';
+import { backupBundle, createBackup, deviceCopyStatus, listBackups, markDeviceCopy, restoreBackup, restoreOnFreshNode, RestoreError } from '../backups.js';
 import { seedFields } from '../fields.js';
 import { runMigrations } from '../migrate.js';
 import { getOwner, getPendingOwner, type OwnerDoc } from '../owner.js';
@@ -123,6 +123,39 @@ export default async function nodeRoutes(app: FastifyInstance) {
     const { secret } = await issueKey({ kind: 'setup', name: 'Setup session', scopes: ['setup'], ttlSec: 3600 });
     reply.setCookie(COOKIE.setup, secret, cookieOpts(3600));
     return { setupSession: true, mode: n.claimMode || 'claim', expiresIn: 3600, address: canonicalUrl(n) };
+  });
+
+  /**
+   * Restore instead of claim: a fresh node becomes the owner's old one, from their recovery kit,
+   * its passphrase and a .ldbackup file. Same gate as claiming (the claim link). Every check runs
+   * before anything is written; afterwards the owner is signed in and connections are told the
+   * new address. Backups carry document files, so this route takes large bodies.
+   */
+  app.post('/api/v1/node/claim/restore', { bodyLimit: 512 * 1024 * 1024 }, async (req, reply) => {
+    rateLimit(req, 'claim-restore', 20, 15 * 60_000);
+    const b = (req.body || {}) as { token?: string; kit?: unknown; passphrase?: string; backup?: string };
+    const raw = String(b.token || '').trim();
+    const t = raw.includes('token=') ? new URL(raw, 'http://x').searchParams.get('token') || '' : raw;
+    const n = t ? await checkClaimToken(t) : null;
+    if (!n) throw new HttpError(401, 'invalid_or_expired_token', "That link isn't valid for this Little Dipper, or it has expired.");
+    if (n.claimed) throw new HttpError(409, 'already_claimed', 'This Little Dipper is already in use. Restore onto a fresh one.');
+    if (!b.kit || !b.passphrase || typeof b.backup !== 'string') throw bad('restore_incomplete', 'Add your recovery kit, its passphrase and a backup file');
+    let r: Awaited<ReturnType<typeof restoreOnFreshNode>>;
+    try {
+      r = await restoreOnFreshNode(b.kit, b.passphrase, b.backup);
+    } catch (e) {
+      if (e instanceof RestoreError) throw bad(e.code, e.message);
+      throw e;
+    }
+    await runMigrations(); // a backup from an older release comes back in today's shape
+    await createBackup('manual'); // the new server starts out with a backup of its own
+    await startSession(reply, deviceLabel(req));
+    const owner = await getOwner();
+    const when = new Date(r.at).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
+    await audit({ actor: ownerActor(owner?._id ?? 'owner'), action: 'node.restore', resource: 'nodes', text: `You restored this Little Dipper from your backup of ${when}${r.files ? `, including ${r.files} document ${r.files === 1 ? 'file' : 'files'}` : ''}`, tone: 'owner' });
+    // Tell connections where the node lives now; they reconnect without new invites.
+    if (r.moved) announceAddress((m) => req.log.warn(m)).catch(() => {});
+    return { restored: true, nodeId: r.nodeId, at: r.at, documents: r.documents, files: r.files, address: canonicalUrl(await getNode()), movedFrom: r.moved };
   });
 
   app.post('/api/v1/node/claim/complete', async (req, reply) => {
