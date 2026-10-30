@@ -47,7 +47,7 @@ export function useAction() {
 // ── toggle: 40×24 track, 18px knob, 150ms ───────────────────────────────
 export function Toggle({ on, onChange, label, style }: { on: boolean; onChange: () => void; label: string; style?: CSSProperties }) {
   return (
-    <button role="switch" aria-checked={on} aria-label={label} onClick={onChange}
+    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={onChange}
       style={{ width: 40, height: 24, borderRadius: 999, border: 'none', padding: 3, background: on ? 'var(--color-accent-2-600)' : 'var(--color-neutral-300)', cursor: 'pointer', display: 'flex', flex: 'none', transition: 'background .15s', ...style }}>
       <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--color-neutral-100)', boxShadow: 'var(--shadow-sm)', transform: `translateX(${on ? 16 : 0}px)`, transition: 'transform .15s' }} />
     </button>
@@ -61,7 +61,7 @@ export function Pills<K extends string>({ value, options, onChange, size = 13, d
       {options.map(([k, label]) => {
         const on = k === value;
         return (
-          <button key={k} role="tab" aria-selected={on} onClick={() => onChange(k)}
+          <button key={k} type="button" role="tab" aria-selected={on} onClick={() => onChange(k)}
             style={{ border: 'none', cursor: 'pointer', font: 'inherit', fontSize: size, padding: size <= 12 ? '5px 12px' : '6px 14px', borderRadius: 999, whiteSpace: 'nowrap', flex: 'none', background: on ? 'var(--color-accent)' : 'transparent', color: on ? 'var(--color-bg)' : 'inherit' }}>
             {label}
           </button>
