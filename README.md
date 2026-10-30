@@ -115,3 +115,9 @@ Card and bank numbers are stored as the last four digits only, and the model has
 - Domains have a full API but no admin screens yet, apart from the reference pages and shared-data display. Contact sharing per domain is API-only so far.
 - File attachments (passport scans etc.) aren't implemented yet. Records have no `attachments` part yet.
 - Domains can't be shown on the public profile yet, though the catalog marks which ones may be (`publicable`).
+
+## License
+
+Little Dipper is free software under the [GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`). You may run, study, change and share it. If you run a modified version as a service for other people, you must offer them its source code under the same license.
+
+The license covers the code. It gives no rights over anyone's data: what an owner keeps on their node is theirs.
