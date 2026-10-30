@@ -4,7 +4,7 @@ import { decrypt, encrypt, isEncrypted, newId } from '../crypto.js';
 import { bad } from '../auth.js';
 import { mask, storeValue, type FieldDoc, type Sensitivity } from '../fields.js';
 import { BUILT_IN_DOMAINS, RESERVED } from './catalog.js';
-import { dateTimeSortKey, displayDateTime, isDateTime, normalizeDateTime } from './datetime.js';
+import { dateTimeSortKey, displayDateTime, isDateTime, normalizeDateTime, type DateTimeValue } from './datetime.js';
 import type { Actor, DomainDef, PartDef, PartType, RecordDoc, VersionDoc } from './types.js';
 
 export type { DomainDef, PartDef, RecordDoc };
@@ -114,6 +114,19 @@ async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> 
 
 const empty = (v: unknown) => v === undefined || v === null || v === '';
 
+/** Rules across the parts of one built-in domain, checked once each part has passed on its own. */
+const CHECKS: Record<string, (data: Record<string, unknown>) => void> = {
+  events: (x) => {
+    const start = x.start as DateTimeValue | undefined, end = x.end as DateTimeValue | undefined;
+    if (start && end) {
+      // All day: compare days (the end is the last day). Timed: the end must come after the start.
+      const ok = x.allDay ? end.at.slice(0, 10) >= start.at.slice(0, 10) : Date.parse(end.at) > Date.parse(start.at);
+      if (!ok) throw bad('end_before_start', x.allDay ? 'The last day is before the first' : 'It ends before it starts');
+    }
+    if (start && x.repeatUntil && String(x.repeatUntil) < start.at.slice(0, 10)) throw bad('end_before_start', '“Repeats until” is before it starts');
+  },
+};
+
 export type RecordInput = { data?: Record<string, unknown>; validFrom?: string | null; validTo?: string | null; notes?: string };
 
 /**
@@ -136,6 +149,7 @@ export async function buildRecord(d: DomainDef, input: RecordInput, existing: Re
   }
   const missing = d.parts.filter((p) => p.required && empty(data[p.key]));
   if (missing.length) throw bad('required', `${d.label} needs ${missing.map((p) => p.label.toLowerCase()).join(', ')}`);
+  CHECKS[d.id]?.(data);
 
   let validFrom = existing?.validFrom ?? null, validTo = existing?.validTo ?? null;
   if (d.dated) {
