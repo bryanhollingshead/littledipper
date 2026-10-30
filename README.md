@@ -116,3 +116,9 @@ Card and bank numbers are stored as the last four digits only, and the model has
 ## Docs
 
 See [docs/README.md](docs/README.md) for the compatibility rules and design notes.
+
+## License
+
+Little Dipper is free software under the [GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`). You may run, study, change and share it. If you run a modified version as a service for other people, you must offer them its source code under the same license.
+
+The license covers the code. It gives no rights over anyone's data: what an owner keeps on their node is theirs.
