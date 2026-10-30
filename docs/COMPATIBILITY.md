@@ -130,4 +130,4 @@ The current code doesn't meet these rules yet in a few places:
 
 ## Open questions
 
-Tracked in OPEN-QUESTIONS.md.
+Still to decide: whether there is an oldest supported release, whether the CLI and environment variables get the same strictness as the HTTP API, and who the maintainers are who can approve a security exception.

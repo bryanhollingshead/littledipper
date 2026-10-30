@@ -5,3 +5,6 @@ data/
 .env
 data-*/
 .DS_Store
+
+# Strategy and planning notes are kept privately, never in this public repo.
+docs/plans/

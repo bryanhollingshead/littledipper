@@ -13,7 +13,7 @@ Before a sensitive transaction, a contact may want to know whether a Little Dipp
 | **ID confirmation** (local) | Is node `ldn_…` really the person I know? | The two people, by comparing node IDs out of band (in person or over a call) |
 | **Identity verification** (Big Dipper) | Are the identity claims on node `ldn_…` true, and unchanged since they were checked? | Big Dipper |
 
-Verification depends on confirmation: a contact asks about a **node ID**, so they need to be sure it's the right one. The word **Verified** in the product is reserved for Big Dipper results. See OPEN-QUESTIONS.md question 5 for the local mark.
+Verification depends on confirmation: a contact asks about a **node ID**, so they need to be sure it's the right one. The word **Verified** in the product is reserved for Big Dipper results. Whether contacts also get a local mark is still an open question.
 
 ## Flow
 
