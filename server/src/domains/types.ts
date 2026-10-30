@@ -62,6 +62,12 @@ export type DomainDef = {
 /** Who wrote to a record: the owner (session), an app key, an import, or Little Dipper itself. */
 export type Actor = { type: 'owner' | 'app' | 'import' | 'system'; id: string };
 
+/**
+ * A record as it stood after one change (or just before, for a delete), kept so owners can see
+ * how it changed and go back. Same fields as the record; secret parts stay encrypted.
+ */
+export type VersionDoc = Omit<RecordDoc, '_id'> & { _id: string; recordId: string; action: 'create' | 'update' | 'delete' | 'restore'; at: string; by: Actor };
+
 export type RecordDoc = {
   _id: string;
   domain: string;

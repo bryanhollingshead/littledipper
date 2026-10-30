@@ -10,7 +10,7 @@ import Database from 'better-sqlite3';
 export const COLLECTIONS = [
   'nodes', 'owners', 'fields', 'contacts', 'nodeLinks', 'grants',
   'connectionRequests', 'invites', 'apiKeys', 'publicProfile', 'audit', 'challenges', 'backups',
-  'records', 'domainDefs', 'messages', 'files', 'documents', 'shares', 'copies',
+  'records', 'domainDefs', 'messages', 'files', 'documents', 'shares', 'copies', 'recordVersions',
 ] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
@@ -113,6 +113,8 @@ const SQLITE_INDEXES: [Collection, string[]][] = [
   ['files', ['documentId']],
   ['shares', ['tokenHash']],
   ['copies', ['contactId']],
+  ['recordVersions', ['recordId']],
+  ['recordVersions', ['domain', 'action']],
 ];
 
 class SqliteStore implements Store {

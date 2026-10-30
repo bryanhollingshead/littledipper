@@ -5,7 +5,7 @@ import { bad } from '../auth.js';
 import { mask, storeValue, type FieldDoc, type Sensitivity } from '../fields.js';
 import { BUILT_IN_DOMAINS, RESERVED } from './catalog.js';
 import { dateTimeSortKey, displayDateTime, isDateTime, normalizeDateTime } from './datetime.js';
-import type { Actor, DomainDef, PartDef, PartType, RecordDoc } from './types.js';
+import type { Actor, DomainDef, PartDef, PartType, RecordDoc, VersionDoc } from './types.js';
 
 export type { DomainDef, PartDef, RecordDoc };
 
@@ -231,6 +231,52 @@ export function sortRecords(d: DomainDef, recs: RecordDoc[]) {
     }
     return b.createdAt.localeCompare(a.createdAt);
   });
+}
+
+// ── history ────────────────────────────────────────────────────────────
+
+/** Deleted records can be brought back for this long; then their history goes too. */
+export const KEEP_DELETED_DAYS = 30;
+
+/** Keep a copy of a record as it stands after a change (as it was, for a delete). */
+export async function recordVersion(rec: RecordDoc, action: VersionDoc['action'], by: Actor) {
+  const { _id, ...rest } = rec;
+  const v: VersionDoc = { ...rest, _id: newId('ver'), recordId: _id, action, at: new Date().toISOString(), by };
+  await ctx.store.insert('recordVersions', v);
+}
+
+/** Every version of one record, newest first. */
+export async function versionsOf(recordId: string) {
+  return (await ctx.store.find<VersionDoc>('recordVersions', { recordId }, { sort: { at: 1 } })).reverse();
+}
+
+/** The version as a record, for recordOut and restores. */
+export const versionRecord = (v: VersionDoc): RecordDoc => {
+  const { _id, recordId, action, at, by, ...rest } = v;
+  return { ...rest, _id: recordId };
+};
+
+/** Records deleted from a domain in the last KEEP_DELETED_DAYS, newest first: their last version before deletion. */
+export async function deletedRecords(domainId: string) {
+  await pruneDeleted();
+  const latest = new Map<string, VersionDoc>();
+  for (const v of await ctx.store.find<VersionDoc>('recordVersions', { domain: domainId, action: 'delete' }, { sort: { at: 1 } })) latest.set(v.recordId, v);
+  const out: VersionDoc[] = [];
+  for (const v of latest.values()) if (!(await ctx.store.get('records', v.recordId))) out.push(v);
+  return out.reverse();
+}
+
+/** Forget the history of records deleted more than KEEP_DELETED_DAYS ago (and not brought back). */
+export async function pruneDeleted() {
+  const cutoff = new Date(Date.now() - KEEP_DELETED_DAYS * 86400_000).toISOString();
+  const gone = new Set<string>();
+  for (const v of await ctx.store.find<VersionDoc>('recordVersions', { action: 'delete' })) {
+    if (v.at < cutoff && !(await ctx.store.get('records', v.recordId))) gone.add(v.recordId);
+  }
+  for (const id of gone) {
+    const last = (await versionsOf(id))[0];
+    if (last?.action === 'delete' && last.at < cutoff) await ctx.store.removeMany('recordVersions', { recordId: id });
+  }
 }
 
 export async function recordsOf(domainId: string) {

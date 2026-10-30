@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { get, post, SENS } from '../../api';
+import { get, longDate, post, SENS } from '../../api';
 import { ErrorNote, Loading, useAction, useAsync } from '../../ui';
-import { Details, duration, fetchCatalog, fmtRange, groupOf, Lock, Mono, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec } from '../../life';
+import { byWhom, Details, duration, fetchCatalog, fmtRange, groupOf, Lock, Mono, RecordEditor, useContactsLite, type ContactLite, type Domain, type Rec, type Version } from '../../life';
 import { plural } from './LifeHub';
 import { CopyList, SendCopy } from './Copies';
 
@@ -27,6 +27,8 @@ export default function Category() {
   const contacts = useContactsLite();
   const { data: catalog, reload: reloadCatalog } = useAsync(fetchCatalog, []);
   const { data, error, reload } = useAsync(() => get<{ items: Rec[] }>(`/api/v1/data/${domain}`), [domain]);
+  const { data: deleted, reload: reloadDeleted } = useAsync(() => get<{ items: Version[]; keepDays: number }>(`/api/v1/data/${domain}/deleted`), [domain]);
+  const { run } = useAction();
   const [editing, setEditing] = useState<Rec | 'new' | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(0);
@@ -37,7 +39,8 @@ export default function Category() {
   const g = groupOf(d.group);
   const current = d.dated ? data.items.filter((r) => r.current) : data.items;
   const past = d.dated ? data.items.filter((r) => !r.current) : [];
-  const done = () => { setEditing(null); reload(); reloadCatalog(); };
+  const done = () => { setEditing(null); reload(); reloadCatalog(); reloadDeleted(); };
+  const bringBack = async (v: Version) => { if (await run(() => post(`/api/v1/data/${d.id}/${v.record.id}/history/${v.version}/restore`))) done(); };
 
   return (
     <div data-screen-label={d.label} style={{ maxWidth: 980 }}>
@@ -95,6 +98,24 @@ export default function Category() {
             </div>
           )}
         </>
+      )}
+
+      {deleted && deleted.items.length > 0 && (
+        <div style={{ marginTop: 30 }}>
+          <h4>Recently deleted</h4>
+          <p className="text-muted" style={{ fontSize: 13, margin: '0 0 10px' }}>Kept for {deleted.keepDays} days, then gone for good. Documents filed only on an entry were deleted with it and don’t come back.</p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {deleted.items.map((v) => (
+              <div key={v.version} className="card" style={{ padding: '12px 18px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12, background: 'var(--color-neutral-100)' }}>
+                <div style={{ flex: 1 }}>
+                  <div>{v.record.title}</div>
+                  <div className="text-muted" style={{ fontSize: 12 }}>Deleted by {byWhom(v.byLabel)} · {longDate(v.at)}</div>
+                </div>
+                <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => bringBack(v)}>Bring back</button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div style={{ marginTop: 30 }}><CopyList query={`domain=${d.id}`} version={sent} heading={<h4>Copies you’ve sent</h4>} /></div>

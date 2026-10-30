@@ -254,6 +254,22 @@ async function main() {
     ok(edited.status === 200 && jobNow.source.type === 'owner' && jobNow.updatedBy.type === 'app' && jobNow.updatedBy.id === writer.id && jobNow.updatedByLabel === 'Career assistant', "an app's edit to the owner's record is credited to the app, and the owner stays its creator");
     await a.call('PATCH', `/api/v1/data/employment/${job.id}`, { notes: '' });
     ok((await a.call('GET', `/api/v1/data/employment/${job.id}`)).updatedBy.type === 'owner', 'the owner editing it again takes the latest change back');
+    const hist = (await a.call('GET', `/api/v1/data/employment/${job.id}/history`)).items;
+    ok(hist[0].action === 'update' && hist[0].byLabel === 'You' && hist[1].byLabel === 'Career assistant' && hist.at(-1).action === 'create' && hist[1].record.notes === 'Promoted in 2023', 'history lists every change, newest first, with who made it');
+    ok(hist.every((h: any) => h.record.masked.includes('employeeId') && h.record.data.employeeId !== 'AS-0042'), 'secret parts stay masked in history');
+    await a.call('POST', `/api/v1/data/employment/${job.id}/history/${hist[1].version}/restore`);
+    const restored = await a.call('GET', `/api/v1/data/employment/${job.id}`);
+    ok(restored.notes === 'Promoted in 2023' && restored.updatedBy.type === 'owner' && (await a.call('GET', `/api/v1/data/employment/${job.id}/history`)).items[0].action === 'restore', 'restoring a version is a new change, and history keeps it');
+    await a.call('PATCH', `/api/v1/data/employment/${job.id}`, { notes: '' });
+    const school = await a.call('POST', '/api/v1/data/education', { data: { institution: 'Night school' } });
+    const gone = await a.call('DELETE', `/api/v1/data/education/${school.id}`);
+    const bin = (await a.call('GET', '/api/v1/data/education/deleted')).items;
+    ok(gone.restorableForDays === 30 && bin.length === 1 && bin[0].record.id === school.id, 'a deleted record is listed for 30 days');
+    await a.call('POST', `/api/v1/data/education/${school.id}/history/${bin[0].version}/restore`);
+    ok((await a.call('GET', `/api/v1/data/education/${school.id}`)).data.institution === 'Night school' && !(await a.call('GET', '/api/v1/data/education/deleted')).items.length, 'and can be brought back');
+    await a.call('DELETE', `/api/v1/data/education/${school.id}`);
+    const noHist = await fetch(`${a.base}/api/v1/data/employment/${job.id}/history`, { headers: { authorization: `Bearer ${(await a.call('POST', '/api/v1/keys', { name: 'IDs only', scopes: ['ids:read'] })).secret}` } });
+    ok(noHist.status === 403, "history needs the category's read scope");
     // Sharing a domain with a connection
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { employment: { scope: 'current' } } });
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { ids: true } }, [409]);
@@ -498,6 +514,7 @@ async function main() {
     const lines = (await exp.text()).trim().split('\n').map((l) => JSON.parse(l));
     ok(lines.some((l) => l.collection === 'fields' && l.value === 'X1234567'), 'export includes decrypted secret values');
     ok(!lines.some((l) => l.collection === 'apiKeys'), 'export excludes credential hashes');
+    ok(lines.some((l) => l.collection === 'recordVersions') && !lines.some((l) => (l.collection === 'records' || l.collection === 'recordVersions') && JSON.stringify(l.data).includes('enc:v1:')), 'export includes history, with secret record parts readable');
     const before = (await a.call('GET', '/api/v1/data/education')).items.length;
     await a.call('POST', '/api/v1/data/education', { data: { institution: 'After the backup' } });
     await a.call('POST', `/api/v1/node/backups/${bk._id ?? bk.id}/restore`);

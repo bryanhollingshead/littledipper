@@ -9,7 +9,7 @@ import { ctx } from './ctx.js';
 import { plainValue, seedFields, type FieldDoc } from './fields.js';
 import { getNode } from './node.js';
 import { BUILT_IN_DOMAINS } from './domains/catalog.js';
-import { buildRecord, countryName, recordsOf, syncDerived } from './domains/records.js';
+import { buildRecord, countryName, recordsOf, recordVersion, syncDerived } from './domains/records.js';
 import type { RecordDoc } from './domains/types.js';
 
 const SYSTEM = { type: 'system' as const, id: 'migration-v2' };
@@ -42,6 +42,7 @@ async function field(key: string) {
 async function addRecord(domainId: string, data: Record<string, unknown>) {
   const rec = await buildRecord(domain(domainId), { data }, null, SYSTEM);
   await ctx.store.insert('records', rec);
+  await recordVersion(rec, 'create', SYSTEM);
 }
 
 /** Run a migration step at most once per node. */

@@ -12,7 +12,7 @@ import {
   addPage, addSuggestion, canSee, checkDate, checkKind, checkLinks, checkSuggestion, checkText, createDocument, deleteDocument, docRef, docScopes,
   documentKinds, documentOr404, documentOut, dropSuggestion, linkDocument, parseLink, removePage, type DocumentDoc,
 } from '../documents.js';
-import { buildRecord, getDomain, listDomains, recordOut, syncDerived, type RecordDoc, type RecordInput } from '../domains/records.js';
+import { buildRecord, getDomain, listDomains, recordOut, recordVersion, syncDerived, type RecordDoc, type RecordInput } from '../domains/records.js';
 import { FILE_TYPES, MAX_FILE_BYTES, readFile, saveFile, type FileDoc, type Source } from '../files.js';
 import { canonicalUrl, getNode } from '../node.js';
 import type { PublicProfileDoc } from '../federation.js';
@@ -184,6 +184,7 @@ export default async function documentRoutes(app: FastifyInstance) {
     const rec = await buildRecord(d, input, existing, { type: s.by.type === 'owner' ? 'owner' : 'app', id: s.by.id });
     if (existing) { const { _id, ...rest } = rec; await ctx.store.update('records', _id, { ...rest }); }
     else await ctx.store.insert('records', rec);
+    await recordVersion(rec, existing ? 'update' : 'create', rec.updatedBy);
     await syncDerived(d.id);
     const linked = await linkDocument(await dropSuggestion(doc, s.id), { domain: d.id, recordId: rec._id });
     const title = recordOut(d, rec).title;

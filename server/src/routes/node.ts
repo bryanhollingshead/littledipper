@@ -12,6 +12,8 @@ import { runMigrations } from '../migrate.js';
 import { getOwner, getPendingOwner, type OwnerDoc } from '../owner.js';
 import { now, sendSigned, type LinkDoc, type PublicProfileDoc } from '../federation.js';
 import { COLLECTIONS } from '../store/index.js';
+import { plainData } from '../domains/records.js';
+import type { RecordDoc } from '../domains/types.js';
 
 let updateCache: { at: number; latest: { version: string; notes: string } | null } = { at: 0, latest: null };
 async function latestRelease() {
@@ -258,6 +260,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
         const out = { ...d };
         // Owner export: Secret values are decrypted so the file is usable on its own.
         if (coll === 'fields' && isEncrypted(out.value)) out.value = decrypt(ctx.keys.masterKey, out.value);
+        if ((coll === 'records' || coll === 'recordVersions') && out.data) out.data = plainData(out as RecordDoc);
         if (coll === 'owners') { delete out.passwordHash; delete out.totp; delete out.recoveryCodeHashes; }
         if (coll === 'nodeLinks') delete out.tokenFromPeerEnc;
         if (coll === 'messages' && isEncrypted(out.body)) out.body = JSON.parse(decrypt(ctx.keys.masterKey, out.body));

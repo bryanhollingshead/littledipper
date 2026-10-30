@@ -6,6 +6,11 @@ import { Confirm, Pills, Toggle, useAction, type ConfirmCfg } from './ui';
 
 // ── types ──────────────────────────────────────────────────────────────
 export type Part = { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean };
+/** One entry in a record's history: the record as it stood after a change (before it, for a delete). */
+export type Version = { version: string; action: 'create' | 'update' | 'delete' | 'restore'; at: string; byLabel: string; record: Rec };
+/** "You" reads as "you" mid-sentence; an app's name stays as it is. */
+export const byWhom = (label: string) => (label === 'You' ? 'you' : label);
+
 export type Domain = {
   id: string; label: string; noun: string; group: string; description: string; sensitivity: Sensitivity; dated: boolean; builtIn: boolean;
   parts: Part[]; title: string; count: number; currentCount: number; preview: string[]; sharedWith: number; feeds: string[];
@@ -212,6 +217,50 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency }: { p:
   }
 }
 
+// ── changes: who changed what, and going back ─────────────────────────
+const ACTION: Record<Version['action'], string> = { create: 'Added', update: 'Changed', delete: 'Deleted', restore: 'Restored' };
+
+/** What differs between a version and the one before it, by label. */
+function changedParts(d: Domain, now: Rec, before: Rec | undefined) {
+  if (!before) return [];
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  const out = d.parts.filter((p) => !same(now.data[p.key], before.data[p.key])).map((p) => p.label);
+  if (!same(now.validFrom, before.validFrom) || !same(now.validTo, before.validTo)) out.push('Dates');
+  if (!same(now.notes, before.notes)) out.push('Notes');
+  return out;
+}
+
+function RecordChanges({ d, rec, onRestored }: { d: Domain; rec: Rec; onRestored: (saved?: Rec) => void }) {
+  const { run } = useAction();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<Version[] | null>(null);
+  const toggle = async () => {
+    setOpen(!open);
+    if (!items) { const x = await run(() => get<{ items: Version[] }>(`/api/v1/data/${d.id}/${rec.id}/history`)); if (x) setItems(x.items); }
+  };
+  const restore = async (v: Version) => {
+    const saved = await run(() => post<Rec>(`/api/v1/data/${d.id}/${rec.id}/history/${v.version}/restore`));
+    if (saved) onRestored(saved);
+  };
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <button type="button" className="btn btn-ghost" style={{ justifySelf: 'start', fontSize: 13 }} onClick={toggle}>{open ? 'Hide changes' : 'See changes'}</button>
+      {open && items && items.map((v, i) => {
+        const what = changedParts(d, v.record, items[i + 1]?.record);
+        return (
+          <div key={v.version} style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, padding: '8px 12px', borderRadius: 12, background: 'var(--color-neutral-100)' }}>
+            <div style={{ flex: 1 }}>
+              <div>{ACTION[v.action]}{what.length ? `: ${what.join(', ')}` : ''}</div>
+              <div className="text-muted" style={{ fontSize: 12 }}>By {byWhom(v.byLabel)} · {new Date(v.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</div>
+            </div>
+            {i > 0 && <button type="button" className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => restore(v)}>Restore this version</button>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── list parts: a small table, one row per item ───────────────────────
 type Row = Record<string, unknown>;
 
@@ -357,7 +406,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   };
 
   const remove = () => setConfirm({
-    title: `Delete this ${d.noun}?`, body: `${rec!.title} is removed from your Little Dipper and from anyone you share ${d.label} with.${docs.some((x) => x.links.length === 1) ? ' Documents filed only on it are deleted too.' : ''}`, cta: 'Delete',
+    title: `Delete this ${d.noun}?`, body: `${rec!.title} is removed from your Little Dipper and from anyone you share ${d.label} with. You can bring it back from Recently deleted for 30 days.${docs.some((x) => x.links.length === 1) ? ' Documents filed only on it are deleted for good.' : ''}`, cta: 'Delete',
     onConfirm: async () => { if (await run(() => del(`/api/v1/data/${d.id}/${rec!.id}`))) onSaved(); },
   });
 
@@ -419,7 +468,8 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
             </>
           )}
           <div className="field"><label htmlFor="notes">Notes</label><textarea id="notes" className="input" style={{ borderRadius: 20, minHeight: 70 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering" /></div>
-          {rec?.updatedByLabel && <div className="text-muted" style={{ fontSize: 12 }}>Last changed by {rec.updatedByLabel === 'You' ? 'you' : rec.updatedByLabel} · {longDate(rec.updatedAt)}</div>}
+          {rec?.updatedByLabel && <div className="text-muted" style={{ fontSize: 12 }}>Last changed by {byWhom(rec.updatedByLabel)} · {longDate(rec.updatedAt)}</div>}
+          {rec && <RecordChanges d={d} rec={rec} onRestored={onSaved} />}
           {error && <div style={{ color: 'var(--color-accent-700)', fontSize: 13 }}>{error}</div>}
           <button type="submit" hidden />
         </form>
