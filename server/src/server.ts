@@ -1,6 +1,6 @@
 import { config } from './config.js';
 import { ctx } from './ctx.js';
-import { openStore } from './store/index.js';
+import { openStore, SQLITE_FILE } from './store/index.js';
 import { bootNode } from './node.js';
 import { runMigrations } from './migrate.js';
 import { buildApp } from './app.js';
@@ -12,7 +12,7 @@ import { startFileSweeper } from './files.js';
 async function main() {
   ctx.store = await openStore(config);
   const say = (m: string) => console.log(`[little-dipper] ${m}`);
-  say(`Store: ${ctx.store.kind === 'mongo' ? 'MongoDB' : `local file (${config.dataDir}/store.json)`}`);
+  say(`Store: ${{ sqlite: `SQLite (${config.dataDir}/${SQLITE_FILE})`, mongo: 'MongoDB', file: `local file (${config.dataDir}/store.json)` }[ctx.store.kind]}`);
   const { moved } = await bootNode(say);
   await runMigrations(say);
 

@@ -80,7 +80,7 @@ async function nodeOut() {
     addressHistory: n.addressHistory,
     version: n.version,
     update: await updateInfo(),
-    hosting: { provider: n.hosting.provider, label: config.hosting.label, region: n.hosting.region, store: ctx.store.kind === 'mongo' ? 'MongoDB' : 'Local file store', documents: docs },
+    hosting: { provider: n.hosting.provider, label: config.hosting.label, region: n.hosting.region, store: { sqlite: 'SQLite', mongo: 'MongoDB', file: 'Local file store' }[ctx.store.kind], documents: docs },
     lastBackupAt: n.lastBackupAt || null,
     publicViewsToday: n.publicViews?.day === new Date().toISOString().slice(0, 10) ? n.publicViews.count : 0,
     claimedAt: n.claimedAt,

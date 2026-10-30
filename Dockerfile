@@ -1,5 +1,7 @@
 # Little Dipper: one image, API + web app. Data lives in /data (mount a volume).
 FROM node:22-alpine AS build
+# Compilers for better-sqlite3, in case no prebuilt binary matches. Build stage only.
+RUN apk add --no-cache python3 make g++
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
