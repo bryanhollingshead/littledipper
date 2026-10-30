@@ -69,8 +69,8 @@ export function fmtDate(v: string | null | undefined) {
 }
 
 /** A datetime part: { at: ISO 8601 with offset, tz: IANA zone }. */
-type DateTime = { at: string; tz: string };
-const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+export type DateTime = { at: string; tz: string };
+export const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 let zones: [string, string][] | null = null;
 const timeZones = () => {
   if (!zones) {
@@ -168,7 +168,7 @@ export function PartialDate({ value, onChange, id }: { value: string; onChange: 
   );
 }
 
-function PartInput({ p, value, onChange, contacts, hiddenSaved, currency }: { p: Part; value: unknown; onChange: (v: unknown) => void; contacts: ContactLite[]; hiddenSaved: boolean; currency: string }) {
+function PartInput({ p, value, onChange, contacts, hiddenSaved, currency, dateOnly }: { p: Part; value: unknown; onChange: (v: unknown) => void; contacts: ContactLite[]; hiddenSaved: boolean; currency: string; dateOnly?: boolean }) {
   const id = `part-${p.key}`;
   const ph = hiddenSaved ? 'Saved and hidden · type to replace' : p.hint || '';
   switch (p.type) {
@@ -180,6 +180,8 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency }: { p:
       // The wall-clock time in the chosen zone; the server works out the offset.
       const dt = (value as Partial<DateTime> | null) || {};
       const tz = dt.tz || localZone(), at = (dt.at ?? '').slice(0, 16);
+      // All-day events: just the day (midnight in the zone); the zone stays as it was.
+      if (dateOnly) return <input id={id} className="input" type="date" value={at.slice(0, 10)} onChange={(e) => onChange(e.target.value ? { at: `${e.target.value}T00:00`, tz } : '')} style={{ maxWidth: 220 }} />;
       return (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
           <input id={id} className="input" type="datetime-local" value={at} onChange={(e) => onChange(e.target.value ? { at: e.target.value, tz } : '')} />
@@ -416,7 +418,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
         {p.label}{p.required && <span aria-hidden style={{ color: 'var(--color-accent-500)' }}>*</span>}
         {p.sensitivity === 'secret' && <span className="tag tag-accent" style={{ padding: '1px 8px', fontSize: 10, gap: 4 }}><Lock style={{ width: 8, height: 9 }} />Secret</span>}
       </label>
-      <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} currency={currency} />
+      <PartInput p={p} value={vals[p.key]} onChange={(v) => set(p.key, v)} contacts={contacts} hiddenSaved={!!rec?.masked.includes(p.key) && !touched.has(p.key)} currency={currency} dateOnly={p.type === 'datetime' && vals.allDay === true} />
     </div>
   );
 

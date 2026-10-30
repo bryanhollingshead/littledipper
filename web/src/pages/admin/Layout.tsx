@@ -18,7 +18,7 @@ const AdminCtx = createContext<Admin>(null as never);
 export const useAdmin = () => useContext(AdminCtx);
 
 const NAV: [string, string, IconName][] = [
-  ['/admin', 'Home', 'home'], ['/admin/life', 'My data', 'data'], ['/admin/documents', 'Documents', 'documents'], ['/admin/lifestream', 'Lifestream', 'lifestream'],
+  ['/admin', 'Home', 'home'], ['/admin/calendar', 'Calendar', 'calendar'], ['/admin/life', 'My data', 'data'], ['/admin/documents', 'Documents', 'documents'], ['/admin/lifestream', 'Lifestream', 'lifestream'],
   ['/admin/receipts', 'Receipts', 'receipts'], ['/admin/contacts', 'Contacts', 'contacts'], ['/admin/messages', 'Messages', 'messages'],
   ['/admin/public', 'Public profile', 'profile'], ['/admin/apps', 'Apps and access', 'apps'], ['/admin/settings', 'Settings', 'settings'],
 ];

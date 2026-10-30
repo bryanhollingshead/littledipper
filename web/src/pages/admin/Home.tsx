@@ -5,6 +5,7 @@ import { useAction, useAsync } from '../../ui';
 import { fetchCatalog, fmtDate, GROUPS } from '../../life';
 import { useAdmin } from './Layout';
 import AddContact from './AddContact';
+import { addDays, daysOf, lookOf, timeOf, ymd, type CalItem } from './Calendar';
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -54,6 +55,7 @@ export default function Home() {
           {inbox.map((ib) => <InboxRow key={ib.key} {...ib} />)}
           {reqs && inbox.length === 0 && <div className="text-muted" style={{ fontSize: 14 }}>Nothing waiting.</div>}
         </div>
+        <ThisWeek />
         <div className="card" style={{ padding: '22px 24px', gap: 10 }}>
           <div className="card-kicker">My data</div>
           <div className="card-title" style={{ fontSize: 20 }}>{started} of {catalog?.length ?? '…'} categories started</div>
@@ -116,6 +118,36 @@ export default function Home() {
         </div>
       </div>
       {modal && <AddContact initialTab={modal === 'invite' ? 'invite' : 'person'} onClose={() => setModal(null)} onDone={(id) => { setModal(null); if (id) nav(`/admin/contacts/${id}`); }} />}
+    </div>
+  );
+}
+
+/** The next seven days from the calendar, at a glance. */
+function ThisWeek() {
+  const today = ymd(new Date());
+  const { data } = useAsync(() => get<{ items: CalItem[] }>(`/api/v1/calendar?from=${today}&to=${addDays(today, 6)}`), [today]);
+  const next = (data?.items ?? []).filter((i) => daysOf(i)[1] >= today).slice(0, 4);
+  const dayLabel = (d: string) => (d <= today ? 'Today' : d === addDays(today, 1) ? 'Tomorrow' : new Date(`${d}T12:00`).toLocaleDateString(undefined, { weekday: 'short' }));
+  return (
+    <div className="card" style={{ padding: '22px 24px', gap: 12 }}>
+      <div className="card-kicker">This week</div>
+      {next.map((i) => {
+        const day = daysOf(i)[0];
+        return (
+          <div key={i.id} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span style={{ width: 46, flex: 'none', textAlign: 'center', padding: '4px 0', borderRadius: 14, background: lookOf(i).bg === 'transparent' ? 'var(--color-neutral-100)' : lookOf(i).bg, color: lookOf(i).ink, border: lookOf(i).border }}>
+              <span style={{ display: 'block', fontSize: 10, letterSpacing: '.06em', textTransform: 'uppercase' }}>{dayLabel(day)}</span>
+              <span style={{ display: 'block', fontFamily: 'var(--font-heading)', fontSize: 18, lineHeight: 1.1 }}>{+day.slice(8)}</span>
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{i.title}</div>
+              <div className="text-muted" style={{ fontSize: 12 }}>{!i.allDay && i.start ? timeOf(i.start.at) : 'All day'}{i.contact ? ` · ${i.contact.name}` : i.detail ? ` · ${i.detail}` : ''}</div>
+            </div>
+          </div>
+        );
+      })}
+      {data && !next.length && <div className="text-muted" style={{ fontSize: 14 }}>A clear week.</div>}
+      <Link className="btn btn-secondary" to="/admin/calendar" style={{ alignSelf: 'flex-start' }}>Open calendar</Link>
     </div>
   );
 }

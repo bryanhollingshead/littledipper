@@ -28,6 +28,13 @@ const PATHS: Record<string, ReactNode> = {
     <circle {...F} cx="19.5" cy="9" r="2.2" />
     <path {...D} d="m19.5 1.8.55 1.45 1.45.55-1.45.55-.55 1.45-.55-1.45-1.45-.55 1.45-.55z" />
   </>,
+  calendar: <>
+    <rect {...F} x="3.5" y="5" width="17" height="15.5" rx="3" />
+    <path {...N} d="M3.5 10h17M8 3v4M16 3v4" />
+    <circle {...D} cx="8.5" cy="14.2" r="1.15" />
+    <circle {...D} cx="12" cy="14.2" r="1.15" opacity=".45" />
+    <circle {...D} cx="15.5" cy="17.2" r="1.15" opacity=".45" />
+  </>,
   receipts: <>
     <path {...F} d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z" />
     <path {...N} d="M9 7.5h6M9 11h6M9 14.5h3.5" />
