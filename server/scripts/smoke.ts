@@ -549,7 +549,11 @@ async function main() {
     await a.call('POST', '/api/v1/data/education', { data: { institution: 'After the backup' } });
     await a.call('POST', `/api/v1/node/backups/${bk._id ?? bk.id}/restore`);
     ok((await a.call('GET', '/api/v1/data/education')).items.length === before, 'restoring a backup puts records back as they were');
+    const kitBefore = (await a.call('GET', '/api/v1/node')).recoveryKit;
+    ok(kitBefore.due === true && kitBefore.reason === 'never' && kitBefore.savedAt === null, 'with no recovery kit saved yet, Home is told to ask for one');
     const kit = await a.call('POST', '/api/v1/node/recovery-kit', { passphrase: 'correct horse battery' });
+    const kitAfter = (await a.call('GET', '/api/v1/node')).recoveryKit;
+    ok(kitAfter.due === false && kitAfter.reason === null && kitAfter.savedAt, 'saving the kit clears the warning');
     const kitFile = path.join(tmp, 'a.ldkit');
     writeFileSync(kitFile, JSON.stringify(kit));
     let refused = false;
@@ -609,6 +613,7 @@ async function main() {
     const restoredF = await f.call('POST', '/api/v1/node/claim/restore', { token: fToken, kit, passphrase: 'correct horse battery', backup: bundleR });
     ok(restoredF.restored && restoredF.nodeId === kit.nodeId && restoredF.address === 'http://localhost:4205' && restoredF.files > 0, `the fresh node becomes Maya's Little Dipper at its new address (${restoredF.files} files)`);
     ok((await f.call('GET', '/api/v1/owner')).displayName === 'Maya Lindqvist' && countRecords(path.join(tmp, 'f')) === recordsOnA, 'the owner is signed in, with every record back');
+    ok((await f.call('GET', '/api/v1/node')).recoveryKit.due === false, 'the restored node remembers its kit was saved');
     await f.call('POST', '/api/v1/node/claim/restore', { token: fToken, kit, passphrase: 'correct horse battery', backup: bundleR }, [401, 409]);
     ok(true, 'a node that was restored can’t be restored over again');
     let heard = false;

@@ -51,6 +51,8 @@ export type NodeInfo = {
   lastBackupAt: string | null; publicViewsToday: number; claimedAt: string | null;
   /** Whether a backup has reached the owner's own device lately; `due` drives the reminder. */
   deviceBackup: { lastAt: string | null; via: 'download' | 'folder' | null; remindAfterDays: number; due: boolean };
+  /** Whether the owner holds a recovery kit that still works; without one, no backup restores elsewhere. */
+  recoveryKit: { savedAt: string | null; due: boolean; reason: 'never' | 'key-changed' | null };
 };
 export type MessageStatus = 'queued' | 'sent' | 'delivered' | 'failed' | 'received' | 'read';
 export type Message = {

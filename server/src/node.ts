@@ -22,6 +22,8 @@ export type NodeDoc = Doc & {
   /** When a backup last reached the owner's own device (downloaded, or saved to their chosen folder). */
   lastDeviceCopyAt?: string | null;
   lastDeviceCopyVia?: 'download' | 'folder' | null;
+  /** When the owner last saved a recovery kit. Without one, no backup can be restored anywhere else. */
+  recoveryKitSavedAt?: string | null;
   blockedNodeIds?: string[];
   /** Big Dipper services the owner chose (saved even before Big Dipper exists). */
   bigDipper?: { services: string[]; settings: Record<string, string>; updatedAt: string };

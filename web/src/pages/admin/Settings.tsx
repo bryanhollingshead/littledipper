@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { startRegistration } from '@simplewebauthn/browser';
 import { addr, bytes, copy, del, get, longDate, patch, post, put, saveFile, whenLabel } from '../../api';
 import { Confirm, Dialog, Loading, Pills, QR, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
@@ -45,6 +45,9 @@ function AddressTab() {
   const { run, busy } = useAction();
   const [domain, setDomain] = useState('');
   const [kit, setKit] = useState<{ a: string; b: string } | null>(null);
+  const [params, setParams] = useSearchParams();
+  // Arrived from Home's "Save your recovery kit": open the dialog straight away.
+  useEffect(() => { if (params.get('kit') === '1') { setKit({ a: '', b: '' }); setParams({}, { replace: true }); } }, [params, setParams]);
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
   const [check, setCheck] = useState<{ txt: boolean; reachable: boolean } | null>(null);
   const a = node.addresses;
@@ -62,7 +65,8 @@ function AddressTab() {
     if (r) {
       saveFile(`little-dipper-${node.id}.ldkit`, JSON.stringify(r, null, 2));
       setKit(null);
-      toast('Recovery kit downloaded');
+      toast('Recovery kit downloaded. Keep it and the passphrase somewhere safe, apart from your backups.');
+      refresh();
     }
   };
   const connect = async () => {
@@ -90,6 +94,9 @@ function AddressTab() {
         <div className="mono" style={{ fontSize: 13, background: 'var(--color-neutral-100)', borderRadius: 999, padding: '8px 16px', width: 'max-content', maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.id}</div>
         {tech && <div className="mono" style={{ fontSize: 12, color: 'var(--color-accent-2-800)' }}>Signing key {node.signingKey}</div>}
         <div style={{ fontSize: 13, color: 'var(--color-accent-2-800)', maxWidth: 620 }}>Keep your recovery kit somewhere safe. It's the only way to bring this ID, and every connection, to a new server.</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: node.recoveryKit.due ? 'var(--color-accent-700)' : 'var(--color-accent-2-800)' }}>
+          {node.recoveryKit.reason === 'never' ? 'You haven’t saved a recovery kit yet.' : node.recoveryKit.reason === 'key-changed' ? 'Your key changed since you saved your kit. Save a new one.' : `Recovery kit saved ${whenLabel(node.recoveryKit.savedAt!)}.`}
+        </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-primary" onClick={() => setKit({ a: '', b: '' })}>Download recovery kit</button>
           {tech && <button className="btn btn-secondary" disabled={busy} onClick={() => run(() => post<{ notified: string[] }>('/api/v1/node/address-change/announce'), (r) => (r.notified.length ? `Told ${r.notified.length} connection${r.notified.length === 1 ? '' : 's'} your address` : 'No connections to tell yet'))}>Send address-change notice</button>}
@@ -233,6 +240,12 @@ function OnThisDevice() {
       <div className="text-muted" style={{ fontSize: 12, maxWidth: 640 }}>
         The file is encrypted with your Little Dipper’s key, so it’s safe to keep anywhere. To restore it on a new server you also need your recovery kit and its passphrase: keep those somewhere else, like a password manager.
       </div>
+      {node.recoveryKit.due && (
+        <div style={{ fontSize: 13, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <b style={{ color: 'var(--color-accent-700)' }}>{node.recoveryKit.reason === 'key-changed' ? 'Your recovery kit is out of date,' : 'You haven’t saved a recovery kit yet,'} so these backups can’t be restored anywhere else.</b>
+          <Link className="btn btn-secondary" to="/admin/settings/address?kit=1" style={{ fontSize: 13 }}>Save your recovery kit</Link>
+        </div>
+      )}
     </div>
   );
 }

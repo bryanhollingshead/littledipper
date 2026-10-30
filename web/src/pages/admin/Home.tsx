@@ -32,6 +32,8 @@ export default function Home() {
     ...(attention?.items || []).slice(0, 3).map((a) => ({
       key: a.id + a.part, initials: initials(catalog?.find((d) => d.id === a.domain)?.label.replace('&', '') || a.domain), title: a.kind === 'deadline' ? `${a.part}: ${a.title}` : `${a.title} ${a.expired ? 'has expired' : 'expires soon'}`, sub: a.kind === 'deadline' && a.expired ? `Passed ${fmtDate(a.date)}` : `${a.part} ${fmtDate(a.date)}`, cta: 'Open', go: () => nav(`/admin/life/${a.domain}`),
     })),
+    // The recovery kit first: without it, no backup can be restored anywhere else.
+    ...(node.recoveryKit.due ? [{ key: 'recovery-kit', initials: 'K', title: 'Save your recovery kit', sub: node.recoveryKit.reason === 'key-changed' ? 'Your key changed since you saved one' : 'Without it, no backup can be restored', cta: 'Save', go: () => nav('/admin/settings/address?kit=1') }] : []),
     // A backup on this device: asked for weekly, or when the browser paused saving to the chosen folder.
     ...(device.needsPermission ? [{ key: 'device-allow', initials: '⤓', title: `Allow saving backups to ${device.folderName}`, sub: 'Your browser paused it after a restart', cta: 'Allow', go: () => run(device.allow, 'Saving backups again') }]
       : node.deviceBackup.due ? [{ key: 'device-backup', initials: '⤓', title: node.deviceBackup.lastAt ? 'Save a fresh backup to this device' : 'Keep a backup on this device', sub: node.deviceBackup.lastAt ? `Last saved here ${whenLabel(node.deviceBackup.lastAt)}` : 'So far your backups are only on your Little Dipper', cta: 'Save', go: () => run(device.download, 'Backup saved to this device') }] : []),

@@ -100,6 +100,14 @@ export async function runMigrations(log: (m: string) => void = () => {}) {
   }
   await syncDerived('contact_methods');
 
+  // Recovery kits saved before the node kept track: the activity log remembers them.
+  await once('recovery-kit-saved-at', async () => {
+    const n = await getNode();
+    if (n.recoveryKitSavedAt) return;
+    const last = (await ctx.store.find<{ _id: string; at: string }>('audit', { action: 'node.recovery-kit' }, { sort: { at: -1 }, limit: 1 }))[0];
+    if (last) await ctx.store.update('nodes', n._id, { recoveryKitSavedAt: last.at });
+  });
+
   // Per-edit provenance: a record from before it existed was last changed by whoever created it.
   await once('record-updated-by', async () => {
     for (const r of await ctx.store.find<RecordDoc>('records', { updatedBy: { $exists: false } })) await ctx.store.update('records', r._id, { updatedBy: r.source });

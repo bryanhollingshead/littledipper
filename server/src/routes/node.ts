@@ -6,7 +6,7 @@ import { fingerprint, encryptWithPassphrase, decrypt, isEncrypted } from '../cry
 import { audit, ownerActor, systemActor } from '../audit.js';
 import { bad, COOKIE, cookieOpts, HttpError, issueKey, rateLimit, requireOwner, requireSession, requireSetup, startSession, deviceLabel } from '../auth.js';
 import { canonicalUrl, checkClaimToken, descriptor, displayAddr, getNode, issueClaimLink, type NodeDoc } from '../node.js';
-import { backupBundle, createBackup, deviceCopyStatus, listBackups, markDeviceCopy, restoreBackup, restoreOnFreshNode, RestoreError } from '../backups.js';
+import { backupBundle, createBackup, deviceCopyStatus, listBackups, markDeviceCopy, recoveryKitStatus, restoreBackup, restoreOnFreshNode, RestoreError } from '../backups.js';
 import { seedFields } from '../fields.js';
 import { runMigrations } from '../migrate.js';
 import { getOwner, getPendingOwner, type OwnerDoc } from '../owner.js';
@@ -85,6 +85,7 @@ async function nodeOut() {
     hosting: { provider: n.hosting.provider, label: config.hosting.label, region: n.hosting.region, store: 'SQLite', documents: docs },
     lastBackupAt: n.lastBackupAt || null,
     deviceBackup: deviceCopyStatus(n),
+    recoveryKit: recoveryKitStatus(n),
     publicViewsToday: n.publicViews?.day === new Date().toISOString().slice(0, 10) ? n.publicViews.count : 0,
     claimedAt: n.claimedAt,
   };
@@ -331,6 +332,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
     const secret = JSON.stringify({ nodeId: n._id, signing: ctx.keys.signing, masterKey: ctx.keys.masterKey, keyHistory: n.keyHistory });
     const kit = { format: 'ldkit', v: 1, nodeId: n._id, createdAt: now(), contains: ['node signing key', 'backup decryption key'], ...encryptWithPassphrase(passphrase, secret) };
     await audit({ actor: ownerActor(p.key._id), action: 'node.recovery-kit', resource: 'nodes', text: 'You downloaded your recovery kit', tone: 'owner' });
+    await ctx.store.update('nodes', n._id, { recoveryKitSavedAt: now() });
     reply.header('content-disposition', `attachment; filename="little-dipper-${n._id}.ldkit"`);
     return kit;
   });

@@ -118,6 +118,16 @@ export function deviceCopyStatus(n: { lastDeviceCopyAt?: string | null; lastDevi
 }
 
 /**
+ * Whether the owner holds a recovery kit that still works: never saved, or saved before the
+ * node's signing key last changed (an older kit carries the old key), means Home asks for one.
+ */
+export function recoveryKitStatus(n: { recoveryKitSavedAt?: string | null; keyHistory?: { retiredAt: string }[] }) {
+  const saved = n.recoveryKitSavedAt ?? null;
+  const keyChanged = !!saved && (n.keyHistory ?? []).some((k) => k.retiredAt > saved);
+  return { savedAt: saved, due: !saved || keyChanged, reason: !saved ? 'never' as const : keyChanged ? 'key-changed' as const : null };
+}
+
+/**
  * Restore a .ldbackup file onto this node: its data and every document file. The node must
  * already hold the same identity (on new hardware, restore the recovery kit first), since only
  * that node's master key can read it.
