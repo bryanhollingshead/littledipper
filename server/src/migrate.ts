@@ -10,6 +10,7 @@ import { plainValue, seedFields, type FieldDoc } from './fields.js';
 import { getNode } from './node.js';
 import { BUILT_IN_DOMAINS } from './domains/catalog.js';
 import { buildRecord, countryName, recordsOf, syncDerived } from './domains/records.js';
+import type { RecordDoc } from './domains/types.js';
 
 const SYSTEM = { type: 'system' as const, id: 'migration-v2' };
 const domain = (id: string) => BUILT_IN_DOMAINS.find((d) => d.id === id)!;
@@ -97,4 +98,9 @@ export async function runMigrations(log: (m: string) => void = () => {}) {
     if (ok) await ctx.store.update('fields', f._id, { derivedFrom: 'contact_methods' });
   }
   await syncDerived('contact_methods');
+
+  // Per-edit provenance: a record from before it existed was last changed by whoever created it.
+  await once('record-updated-by', async () => {
+    for (const r of await ctx.store.find<RecordDoc>('records', { updatedBy: { $exists: false } })) await ctx.store.update('records', r._id, { updatedBy: r.source });
+  });
 }

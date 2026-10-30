@@ -59,6 +59,9 @@ export type DomainDef = {
   schemaVersion: number;
 };
 
+/** Who wrote to a record: the owner (session), an app key, an import, or Little Dipper itself. */
+export type Actor = { type: 'owner' | 'app' | 'import' | 'system'; id: string };
+
 export type RecordDoc = {
   _id: string;
   domain: string;
@@ -67,8 +70,10 @@ export type RecordDoc = {
   validFrom: string | null;
   validTo: string | null;
   notes: string;
-  /** Who wrote it. Owner, an app key, an import… */
-  source: { type: 'owner' | 'app' | 'import' | 'system'; id: string };
+  /** Who created it. Owner, an app key, an import… */
+  source: Actor;
+  /** Who made the latest change: set on every create and edit, so an app's edit to the owner's record says so. */
+  updatedBy: Actor;
   schemaVersion: number;
   createdAt: string;
   updatedAt: string;

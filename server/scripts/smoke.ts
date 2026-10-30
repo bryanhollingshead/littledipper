@@ -247,6 +247,13 @@ async function main() {
     const emp = await a.call('POST', '/api/v1/keys', { name: 'Resume builder', scopes: ['employment:read'] });
     const auth = { headers: { authorization: `Bearer ${emp.secret}` } };
     ok((await fetch(a.base + '/api/v1/data/employment', auth)).status === 200 && (await fetch(a.base + '/api/v1/data/ids', auth)).status === 403, 'employment:read key reads jobs but not IDs');
+    ok(job.updatedBy.type === 'owner' && job.updatedByLabel === 'You', 'a new record says the owner made it');
+    const writer = await a.call('POST', '/api/v1/keys', { name: 'Career assistant', scopes: ['employment:write'] });
+    const edited = await fetch(`${a.base}/api/v1/data/employment/${job.id}`, { method: 'PATCH', headers: { authorization: `Bearer ${writer.secret}`, 'content-type': 'application/json' }, body: JSON.stringify({ notes: 'Promoted in 2023' }) });
+    const jobNow = await a.call('GET', `/api/v1/data/employment/${job.id}`);
+    ok(edited.status === 200 && jobNow.source.type === 'owner' && jobNow.updatedBy.type === 'app' && jobNow.updatedBy.id === writer.id && jobNow.updatedByLabel === 'Career assistant', "an app's edit to the owner's record is credited to the app, and the owner stays its creator");
+    await a.call('PATCH', `/api/v1/data/employment/${job.id}`, { notes: '' });
+    ok((await a.call('GET', `/api/v1/data/employment/${job.id}`)).updatedBy.type === 'owner', 'the owner editing it again takes the latest change back');
     // Sharing a domain with a connection
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { employment: { scope: 'current' } } });
     await a.call('PUT', `/api/v1/contacts/${cA.id}/grants`, { domains: { ids: true } }, [409]);

@@ -5,7 +5,7 @@ import { bad } from '../auth.js';
 import { mask, storeValue, type FieldDoc, type Sensitivity } from '../fields.js';
 import { BUILT_IN_DOMAINS, RESERVED } from './catalog.js';
 import { dateTimeSortKey, displayDateTime, isDateTime, normalizeDateTime } from './datetime.js';
-import type { DomainDef, PartDef, PartType, RecordDoc } from './types.js';
+import type { Actor, DomainDef, PartDef, PartType, RecordDoc } from './types.js';
 
 export type { DomainDef, PartDef, RecordDoc };
 
@@ -120,7 +120,8 @@ export type RecordInput = { data?: Record<string, unknown>; validFrom?: string |
  * Build the stored form of a record from input (create) or input merged onto an existing record (patch).
  * In a patch, a part set to null is removed; parts not mentioned are kept as stored (still encrypted).
  */
-export async function buildRecord(d: DomainDef, input: RecordInput, existing: RecordDoc | null, source: RecordDoc['source']): Promise<RecordDoc> {
+/** `by` is whoever is making this change: the creator on a new record, the latest editor on an existing one. */
+export async function buildRecord(d: DomainDef, input: RecordInput, existing: RecordDoc | null, by: Actor): Promise<RecordDoc> {
   const inData = (input.data ?? {}) as Record<string, unknown>;
   const unknownKeys = Object.keys(inData).filter((k) => !d.parts.some((p) => p.key === k));
   if (unknownKeys.length) throw bad('unknown_parts', `${d.label} has no ${unknownKeys.join(', ')}`);
@@ -146,11 +147,17 @@ export async function buildRecord(d: DomainDef, input: RecordInput, existing: Re
   return {
     _id: existing?._id ?? newId('rec'), domain: d.id, data, validFrom, validTo,
     notes: input.notes !== undefined ? String(input.notes).slice(0, 10000) : existing?.notes ?? '',
-    source: existing?.source ?? source, schemaVersion: d.schemaVersion, createdAt: existing?.createdAt ?? t, updatedAt: t,
+    source: existing?.source ?? by, updatedBy: by, schemaVersion: d.schemaVersion, createdAt: existing?.createdAt ?? t, updatedAt: t,
   };
 }
 
 // ── reading ────────────────────────────────────────────────────────────
+
+/** Readable names for whoever changed records, for owner-facing screens: "You", an app key's name… */
+export async function actorLabels(): Promise<(a: Actor) => string> {
+  const keys = new Map((await ctx.store.find<{ _id: string; name?: string }>('apiKeys', { kind: 'app' })).map((k) => [k._id, k.name]));
+  return (a) => (a.type === 'owner' ? 'You' : a.type === 'app' ? keys.get(a.id) || 'An app' : a.type === 'import' ? 'Import' : 'Little Dipper');
+}
 
 /** Part values with secrets decrypted. */
 export function plainData(rec: RecordDoc): Record<string, unknown> {
@@ -199,7 +206,8 @@ export function recordOut(d: DomainDef, r: RecordDoc, opts: { reveal?: boolean }
   return {
     id: r._id, domain: d.id, title: renderTitle(d, plain, opts.reveal ? undefined : new Set(masked)),
     data, masked, validFrom: r.validFrom, validTo: r.validTo, current: isCurrent(d, r),
-    notes: r.notes, source: r.source, schemaVersion: r.schemaVersion, createdAt: r.createdAt, updatedAt: r.updatedAt,
+    // Records from before per-edit provenance (or restored from an older backup) were last changed by their creator.
+    notes: r.notes, source: r.source, updatedBy: r.updatedBy ?? r.source, schemaVersion: r.schemaVersion, createdAt: r.createdAt, updatedAt: r.updatedAt,
   };
 }
 

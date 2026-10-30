@@ -1,6 +1,6 @@
 /** Shared pieces for the "My data" area: catalog types, group styling, dates, and the schema-driven record editor. */
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { del, FILE_ACCEPT, get, patch, post, uploadDocument, type DocRef, type Sensitivity } from './api';
+import { del, FILE_ACCEPT, get, longDate, patch, post, uploadDocument, type DocRef, type Sensitivity } from './api';
 import { DocTiles } from './docs';
 import { Confirm, Pills, Toggle, useAction, type ConfirmCfg } from './ui';
 
@@ -15,6 +15,8 @@ export type Domain = {
 export type Rec = {
   id: string; domain: string; title: string; data: Record<string, unknown>; masked: string[]; validFrom: string | null; validTo: string | null;
   current: boolean; notes: string; createdAt: string; updatedAt: string;
+  /** Who made the latest change, as the server names them: "You", an app's name, "Import"… */
+  updatedByLabel?: string;
   documents?: DocRef[];
 };
 export type ContactLite = { id: string; displayName: string };
@@ -417,6 +419,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
             </>
           )}
           <div className="field"><label htmlFor="notes">Notes</label><textarea id="notes" className="input" style={{ borderRadius: 20, minHeight: 70 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering" /></div>
+          {rec?.updatedByLabel && <div className="text-muted" style={{ fontSize: 12 }}>Last changed by {rec.updatedByLabel === 'You' ? 'you' : rec.updatedByLabel} · {longDate(rec.updatedAt)}</div>}
           {error && <div style={{ color: 'var(--color-accent-700)', fontSize: 13 }}>{error}</div>}
           <button type="submit" hidden />
         </form>

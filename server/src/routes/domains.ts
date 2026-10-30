@@ -10,9 +10,10 @@ import { contactsSharing, nudgePeers } from '../contacts.js';
 import { documentsByRecord, recordRemoved } from '../documents.js';
 import { isDateTime } from '../domains/datetime.js';
 import {
-  buildRecord, checkCustomDomain, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, plainData,
+  actorLabels, buildRecord, checkCustomDomain, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, plainData,
   recordOut, recordsOf, sortRecords, syncDerived, DERIVED, type DomainDef, type RecordDoc, type RecordInput,
 } from '../domains/records.js';
+import type { Actor } from '../domains/types.js';
 
 const DERIVED_DOMAINS = new Set(Object.values(DERIVED).map((x) => x.domain));
 const readScopes = (d: string) => [`${d}:read`, 'records:read'];
@@ -159,7 +160,8 @@ export default async function domainRoutes(app: FastifyInstance) {
     const { domain, id } = req.params as { domain: string; id?: string };
     const d = await domainOr404(domain);
     const p = await requireOwner(req, write ? writeScopes(d.id) : readScopes(d.id));
-    return { d, p, id };
+    const by: Actor = { type: p.isSession ? 'owner' : 'app', id: p.key._id };
+    return { d, p, id, by };
   };
 
   for (const base of ['/api/v1/data/:domain', '/api/v1/:domain']) {
@@ -170,16 +172,17 @@ export default async function domainRoutes(app: FastifyInstance) {
       if (q.current === 'true') recs = recs.filter((r) => isCurrent(d, r));
       if (q.from || q.to) recs = recs.filter((r) => inRange(r, q.from, q.to));
       const docs = await documentsByRecord(d.id);
-      return { domain: d.id, items: recs.map((r) => ({ ...recordOut(d, r), documents: docs.get(r._id) ?? [] })) };
+      const label = await actorLabels();
+      return { domain: d.id, items: recs.map((r) => { const out = recordOut(d, r); return { ...out, updatedByLabel: label(out.updatedBy), documents: docs.get(r._id) ?? [] }; }) };
     });
 
     app.post(base, async (req, reply) => {
-      const { d, p } = await ctxFor(req, true);
-      const rec = await buildRecord(d, (req.body || {}) as RecordInput, null, { type: p.isSession ? 'owner' : 'app', id: p.key._id });
+      const { d, p, by } = await ctxFor(req, true);
+      const rec = await buildRecord(d, (req.body || {}) as RecordInput, null, by);
       await ctx.store.insert('records', rec);
       await demoteOtherPrimaries(rec);
       await syncDerived(d.id);
-      const out = recordOut(d, rec);
+      const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
       nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
       await audit({ actor: ownerActor(p.key._id), action: 'record.create', resource: `${d.id}/${rec._id}`, text: `${p.isSession ? 'You' : 'An app'} added ${out.title} to ${d.label}`, tone: 'owner' });
       reply.code(201);
@@ -189,19 +192,20 @@ export default async function domainRoutes(app: FastifyInstance) {
     app.get(`${base}/:id`, async (req) => {
       const { d, id } = await ctxFor(req, false);
       const r = await recordOr404(d, id!);
-      return { ...recordOut(d, r), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
+      const out = recordOut(d, r);
+      return { ...out, updatedByLabel: (await actorLabels())(out.updatedBy), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
     });
 
     app.patch(`${base}/:id`, async (req) => {
-      const { d, p, id } = await ctxFor(req, true);
+      const { d, p, id, by } = await ctxFor(req, true);
       const existing = await recordOr404(d, id!);
-      const rec = await buildRecord(d, (req.body || {}) as RecordInput, existing, existing.source);
+      const rec = await buildRecord(d, (req.body || {}) as RecordInput, existing, by);
       const { _id, ...rest } = rec;
       // Replace data wholesale so removed parts really go.
       await ctx.store.update('records', _id, { ...rest });
       await demoteOtherPrimaries(rec);
       await syncDerived(d.id);
-      const out = recordOut(d, rec);
+      const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
       nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
       await audit({ actor: ownerActor(p.key._id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${p.isSession ? 'You' : 'An app'} updated ${out.title} in ${d.label}`, tone: 'owner' });
       return out;
