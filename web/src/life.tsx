@@ -60,6 +60,29 @@ export function fmtDate(v: string | null | undefined) {
   if (!d) return `${MONTHS[+m - 1]} ${y}`;
   return `${+d} ${MONTHS[+m - 1]} ${y}`;
 }
+
+/** A datetime part: { at: ISO 8601 with offset, tz: IANA zone }. */
+type DateTime = { at: string; tz: string };
+const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+let zones: [string, string][] | null = null;
+const timeZones = () => {
+  if (!zones) {
+    const all = Intl.supportedValuesOf('timeZone');
+    zones = (all.includes(localZone()) ? all : [localZone(), ...all]).map((z) => [z, z.replace(/_/g, ' ')]);
+  }
+  return zones;
+};
+
+/** In the viewer's own time, plus the local time there when the event's zone is different. */
+export function fmtDateTime(v: DateTime) {
+  const opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' };
+  try {
+    const when = new Date(v.at);
+    const mine = new Intl.DateTimeFormat(undefined, opts).format(when);
+    if (v.tz === localZone()) return mine;
+    return `${mine} (${new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone: v.tz }).format(when)} there)`;
+  } catch { return v.at; }
+}
 export function fmtRange(from: string | null, to: string | null) {
   if (!from && !to) return '';
   if (!from) return `Until ${fmtDate(to)}`;
@@ -106,6 +129,7 @@ export function show(p: Part, v: unknown, contacts: ContactLite[]): string {
     case 'list': { const n = (v as unknown[]).length; return n ? `${n} ${n === 1 ? 'row' : 'rows'}` : ''; }
     case 'boolean': return v ? 'Yes' : 'No';
     case 'date': return fmtDate(String(v));
+    case 'datetime': return fmtDateTime(v as DateTime);
     case 'contact': return contacts.find((c) => c.id === v)?.displayName ?? 'Removed contact';
     case 'last4': return `•••• ${v}`;
     case 'url': return String(v).replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -145,6 +169,17 @@ function PartInput({ p, value, onChange, contacts, hiddenSaved, currency }: { p:
       return <textarea id={id} className="input" style={{ borderRadius: 20, minHeight: 80 }} placeholder={ph} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} />;
     case 'date':
       return <PartialDate id={id} value={String(value ?? '')} onChange={onChange} />;
+    case 'datetime': {
+      // The wall-clock time in the chosen zone; the server works out the offset.
+      const dt = (value as Partial<DateTime> | null) || {};
+      const tz = dt.tz || localZone(), at = (dt.at ?? '').slice(0, 16);
+      return (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <input id={id} className="input" type="datetime-local" value={at} onChange={(e) => onChange(e.target.value ? { at: e.target.value, tz } : '')} />
+          <Select value={tz} onChange={(z) => onChange({ at, tz: z || localZone() })} options={timeZones()} placeholder="Time zone" />
+        </div>
+      );
+    }
     case 'country':
       return <Select id={id} value={String(value ?? '')} onChange={onChange} options={countries()} placeholder="Choose a country" />;
     case 'enum':
@@ -302,6 +337,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
         v = m.amount === '' || m.amount === undefined ? null : { amount: Number(m.amount), currency: m.currency || 'USD' };
       }
       if (p.type === 'number' && v !== '' && v !== undefined) v = Number(v);
+      if (p.type === 'datetime' && v && typeof v === 'object' && !(v as Partial<DateTime>).at) v = undefined;
       if (p.type === 'list' && Array.isArray(v)) v = cleanRows(p, v as Row[]);
       if (Array.isArray(v) && !v.length) v = rec ? null : undefined;
       data[p.key] = v === '' || v === undefined ? (rec ? null : undefined) : v;

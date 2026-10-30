@@ -5,6 +5,7 @@ export type PartType =
   | 'text'      // one line
   | 'longtext'  // paragraphs
   | 'date'      // partial ISO date: YYYY, YYYY-MM or YYYY-MM-DD (histories rarely know the day)
+  | 'datetime'  // a moment and its time zone: { at: ISO 8601 with offset, tz: IANA zone } (see datetime.ts)
   | 'email'
   | 'phone'
   | 'url'

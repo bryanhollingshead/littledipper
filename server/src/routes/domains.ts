@@ -8,6 +8,7 @@ import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner, requireSession } from '../auth.js';
 import { contactsSharing, nudgePeers } from '../contacts.js';
 import { documentsByRecord, recordRemoved } from '../documents.js';
+import { isDateTime } from '../domains/datetime.js';
 import {
   buildRecord, checkCustomDomain, demoteOtherPrimaries, getDomain, isCurrent, listDomains, partSens, plainData,
   recordOut, recordsOf, sortRecords, syncDerived, DERIVED, type DomainDef, type RecordDoc, type RecordInput,
@@ -109,20 +110,22 @@ export default async function domainRoutes(app: FastifyInstance) {
     const horizon = new Date(Date.now() + days * 86400_000).toISOString().slice(0, 10);
     const items = [];
     for (const d of await listDomains()) {
-      const dateParts = d.parts.filter((x) => x.type === 'date' && (x.remind || /expires/i.test(x.key)));
+      const dateParts = d.parts.filter((x) => (x.type === 'date' || x.type === 'datetime') && (x.remind || /expires/i.test(x.key)));
       if (!dateParts.length) continue;
       for (const r of await recordsOf(d.id)) {
         if (!isCurrent(d, r)) continue;
         const plain = plainData(r);
         for (const x of dateParts) {
-          const v = plain[x.key] as string | undefined;
-          if (!v) continue;
+          const raw = plain[x.key];
+          if (!raw) continue;
+          // A datetime counts by its local date; clients that know the type also get the moment itself.
+          const v = isDateTime(raw) ? raw.at.slice(0, 10) : String(raw);
           // A partial date expires at the end of its period: 2027 → 2027-12-31, 2027-04 → 2027-04-30.
           const end = v.length === 4 ? `${v}-12-31` : v.length === 7 ? new Date(Date.UTC(+v.slice(0, 4), +v.slice(5, 7), 0)).toISOString().slice(0, 10) : v;
           if (end > horizon) continue;
           // Deadlines (return by, warranty until) stop mattering soon after they pass; expired IDs keep nagging.
           if (x.remind && end < new Date(Date.now() - 14 * 86400_000).toISOString().slice(0, 10)) continue;
-          items.push({ domain: d.id, domainLabel: d.label, id: r._id, title: recordOut(d, r).title, part: x.label, kind: x.remind ? 'deadline' : 'expiry', date: v, expired: end < today });
+          items.push({ domain: d.id, domainLabel: d.label, id: r._id, title: recordOut(d, r).title, part: x.label, kind: x.remind ? 'deadline' : 'expiry', date: v, ...(isDateTime(raw) ? { datetime: raw } : {}), expired: end < today });
         }
       }
     }

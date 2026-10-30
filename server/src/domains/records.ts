@@ -4,6 +4,7 @@ import { decrypt, encrypt, isEncrypted, newId } from '../crypto.js';
 import { bad } from '../auth.js';
 import { mask, storeValue, type FieldDoc, type Sensitivity } from '../fields.js';
 import { BUILT_IN_DOMAINS, RESERVED } from './catalog.js';
+import { dateTimeSortKey, displayDateTime, isDateTime, normalizeDateTime } from './datetime.js';
 import type { DomainDef, PartDef, PartType, RecordDoc } from './types.js';
 
 export type { DomainDef, PartDef, RecordDoc };
@@ -23,7 +24,7 @@ export async function getDomain(id: string): Promise<DomainDef | null> {
   return BUILT_IN_DOMAINS.find((d) => d.id === id) ?? (await ctx.store.findOne<DomainDef & { _id: string }>('domainDefs', { id })) ?? null;
 }
 
-const PART_TYPES: PartType[] = ['text', 'longtext', 'date', 'email', 'phone', 'url', 'country', 'currency', 'money', 'number', 'boolean', 'enum', 'last4', 'contact'];
+const PART_TYPES: PartType[] = ['text', 'longtext', 'date', 'datetime', 'email', 'phone', 'url', 'country', 'currency', 'money', 'number', 'boolean', 'enum', 'last4', 'contact'];
 
 /** Validate an owner-defined domain. Ids are x_ + slug so they never collide with built-ins or routes. */
 export function checkCustomDomain(input: Partial<DomainDef>): DomainDef {
@@ -67,6 +68,7 @@ async function checkPart(p: PartDef, v: unknown, cx: PartCtx): Promise<unknown> 
       return s;
     }
     case 'date': return isPartialDate(v) ? v : fail('use YYYY, YYYY-MM or YYYY-MM-DD');
+    case 'datetime': return normalizeDateTime(v) ?? fail('use { at: "YYYY-MM-DDTHH:MM", tz: "America/New_York" }; at may include a UTC offset');
     case 'email': return EMAIL.test(String(v).trim()) ? String(v).trim() : fail('not an email address');
     case 'phone': return /^[+\d][\d\s().\-x]{3,30}$/.test(String(v).trim()) ? String(v).trim() : fail('not a phone number');
     case 'url': {
@@ -166,6 +168,7 @@ export function displayValue(p: PartDef, v: unknown): string {
     case 'money': { const m = v as { amount: number; currency: string }; try { return new Intl.NumberFormat('en', { style: 'currency', currency: m.currency, maximumFractionDigits: Number.isInteger(m.amount) ? 0 : 2 }).format(m.amount); } catch { return `${m.amount} ${m.currency}`; } }
     case 'boolean': return v ? 'Yes' : 'No';
     case 'list': { const n = (v as unknown[]).length; return n ? `${n} ${n === 1 ? 'row' : 'rows'}` : ''; }
+    case 'datetime': return isDateTime(v) ? displayDateTime(v) : String(v);
     default: return String(v);
   }
 }
@@ -200,13 +203,16 @@ export function recordOut(d: DomainDef, r: RecordDoc, opts: { reveal?: boolean }
   };
 }
 
+/** A part value as sortable text: dates as written, a datetime by its instant. */
+const sortKey = (v: unknown) => (isDateTime(v) ? dateTimeSortKey(v) : String(v ?? ''));
+
 /** Newest first; current records ahead of ended ones. */
 export function sortRecords(d: DomainDef, recs: RecordDoc[]) {
   const by = d.sortBy;
   return recs.sort((a, b) => {
     if (by) {
       // Undated entries last; plain values only (a sortBy part is never secret).
-      const x = String(a.data[by] ?? ''), y = String(b.data[by] ?? '');
+      const x = sortKey(a.data[by]), y = sortKey(b.data[by]);
       if (x !== y) return !x ? 1 : !y ? -1 : y.localeCompare(x);
       return b.createdAt.localeCompare(a.createdAt);
     }

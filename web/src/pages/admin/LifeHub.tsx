@@ -134,7 +134,7 @@ function TimelineSpark({ n }: { n: number }) {
   );
 }
 
-const TYPES: [string, string][] = [['text', 'Text'], ['longtext', 'Paragraph'], ['date', 'Date'], ['number', 'Number'], ['money', 'Money'], ['boolean', 'Yes / no'], ['email', 'Email'], ['phone', 'Phone'], ['url', 'Link'], ['country', 'Country'], ['contact', 'Contact']];
+const TYPES: [string, string][] = [['text', 'Text'], ['longtext', 'Paragraph'], ['date', 'Date'], ['datetime', 'Date and time'], ['number', 'Number'], ['money', 'Money'], ['boolean', 'Yes / no'], ['email', 'Email'], ['phone', 'Phone'], ['url', 'Link'], ['country', 'Country'], ['contact', 'Contact']];
 
 function NewCategory({ onClose, onDone }: { onClose: () => void; onDone: (id: string) => void }) {
   const { run, busy } = useAction();

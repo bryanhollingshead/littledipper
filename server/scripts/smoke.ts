@@ -234,6 +234,15 @@ async function main() {
     const wine = await a.call('POST', '/api/v1/catalog', { label: 'Wine cellar', parts: [{ label: 'Wine', type: 'text', required: true }, { label: 'Vintage', type: 'number' }], dated: false });
     await a.call('POST', `/api/v1/data/${wine.id}`, { data: { Wine: 'Willamette Pinot', Vintage: 2018 } });
     ok(wine.id === 'x_wine_cellar' && (await a.call('GET', `/api/v1/data/${wine.id}`)).items.length === 1, 'custom category works like a built-in one');
+    const appts = await a.call('POST', '/api/v1/catalog', { label: 'Appointments', parts: [{ label: 'What', type: 'text', required: true }, { label: 'When', type: 'datetime', required: true }], dated: false });
+    const appt = await a.call('POST', `/api/v1/data/${appts.id}`, { data: { What: 'Dentist', When: { at: '2026-11-04T09:30', tz: 'America/New_York' } } });
+    ok(appt.data.When.at === '2026-11-04T09:30:00-05:00' && appt.data.When.tz === 'America/New_York', 'a datetime given as wall-clock time is stored with its offset');
+    const summer = await a.call('POST', `/api/v1/data/${appts.id}`, { data: { What: 'Picnic', When: { at: '2026-07-04T16:00:00Z', tz: 'America/New_York' } } });
+    ok(summer.data.When.at === '2026-07-04T12:00:00-04:00', 'a UTC datetime is re-expressed in its zone, daylight saving included');
+    const badZone = await fetch(`${a.base}/api/v1/data/${appts.id}`, { method: 'POST', headers: { 'content-type': 'application/json', origin: a.base, cookie: [...a.jar].map(([k, v]) => `${k}=${v}`).join('; ') }, body: JSON.stringify({ data: { What: 'x', When: { at: '2026-11-04T09:30', tz: 'Mars/Olympus' } } }) });
+    ok(badZone.status === 400 && (await badZone.json()).code === 'invalid_value', 'an unknown time zone is refused with a clear code');
+    const apptList = (await a.call('GET', `/api/v1/data/${appts.id}`)).items;
+    ok(apptList.length === 2 && apptList.some((r: any) => r.title.includes('Dentist')), 'datetime records list and read back');
     // Scoped app key
     const emp = await a.call('POST', '/api/v1/keys', { name: 'Resume builder', scopes: ['employment:read'] });
     const auth = { headers: { authorization: `Bearer ${emp.secret}` } };
