@@ -26,7 +26,7 @@ The server prints a claim link on first boot:
 
 In development, pages on :4000 redirect to the web app on :5173 (`LD_WEB_DEV_URL`), so claim, share and copy links work as printed. Passkeys need a real browser on `localhost` or https.
 
-With no `MONGODB_URI`, data goes to a local JSON file store in `./data` (fine for development and tiny installs). Set `MONGODB_URI` to use MongoDB.
+Data lives in one SQLite file, `little-dipper.db`, in `./data` (`LD_DATA_DIR`). There is no database server to run. A node from before SQLite moves its `store.json` across on first start and keeps the old file as `store.json.migrated`.
 
 Lost the link, or it expired (1 hour)?
 
@@ -55,9 +55,8 @@ The smoke test starts two instances, claims both with a software passkey, then r
 |---|---|---|
 | `LD_PUBLIC_URL` | provider hostname, else `http://localhost:$PORT` | The host address. Configuration, never hard-coded. Detected automatically on Render, Railway and Fly. |
 | `PORT` | `4000` | |
-| `MONGODB_URI` / `MONGODB_DB` | unset / `little_dipper` | Unset means the local file store. |
-| `LD_DATA_DIR` | `./data` | Keystore (file mode), file store, encrypted backups. |
-| `LD_KEYSTORE_KEY` | unset | Set this on hosts with an ephemeral disk. The node identity is then stored in the database, encrypted with this key. |
+| `LD_DATA_DIR` | `./data` | The SQLite database, file contents, keystore (file mode) and encrypted backups. Must be a persistent disk. |
+| `LD_KEYSTORE_KEY` | unset | Stores the node identity in the database, encrypted with this key, instead of in `keystore.json`. The key stays in the host's secret settings, off the disk. |
 | `LD_CLAIM_TOKEN` | unset | Lets an installer pre-generate the first claim token and open `/claim?token=…` itself. |
 | `LD_DEPLOY_HOOK_URL` | unset | Enables **Update now** (e.g. a Render deploy hook). A backup is taken first. |
 | `LD_UPDATE_FEED_URL` | unset | JSON `{ version, notes }` for the latest release. |
@@ -66,7 +65,7 @@ The smoke test starts two instances, claims both with a software passkey, then r
 
 ## Deploy
 
-- **Render**: `render.yaml` (Docker runtime, MongoDB Atlas via `MONGODB_URI`, generated `LD_KEYSTORE_KEY`, 1 GB disk for backups). The claim link is in the service logs.
+- **Render**: `render.yaml` (Docker runtime, generated `LD_KEYSTORE_KEY`, 1 GB disk for the database and backups). The claim link is in the service logs.
 - **Docker**: `docker compose up -d`, then `docker logs little-dipper | grep claim`. Expired? `docker exec little-dipper little-dipper claim-link`.
 - **VPS**: `npm run build`, run `node server/dist/server.js` under systemd, and use `little-dipper claim-link` (the `bin` in `server/package.json`) with the same environment.
 

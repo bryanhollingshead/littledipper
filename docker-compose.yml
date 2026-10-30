@@ -9,16 +9,7 @@ services:
     environment:
       # The address people will use. Put a TLS proxy (Caddy, Traefik…) in front for https.
       LD_PUBLIC_URL: ${LD_PUBLIC_URL:-http://localhost:4000}
-      MONGODB_URI: mongodb://mongo:27017
     volumes:
-      - ld-data:/data
-    depends_on:
-      - mongo
-  mongo:
-    image: mongo:7
-    restart: unless-stopped
-    volumes:
-      - ld-mongo:/data/db
+      - ld-data:/data # the SQLite database, file contents and backups
 volumes:
   ld-data:
-  ld-mongo:

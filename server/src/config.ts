@@ -31,8 +31,6 @@ export const config = {
   /** The host address this instance was deployed with. Configuration, never hard-coded. */
   hostUrl: publicUrl(),
   dataDir: path.resolve(process.env.LD_DATA_DIR || './data'),
-  mongoUri: process.env.MONGODB_URI || '',
-  mongoDb: process.env.MONGODB_DB || 'little_dipper',
   /** Built web app to serve. */
   webDist: path.resolve(process.env.LD_WEB_DIST || new URL('../../web/dist', import.meta.url).pathname),
   /** Development: send page requests to the Vite dev server, so links to this address (claim, share, copy) open the current app. */

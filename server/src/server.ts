@@ -10,9 +10,9 @@ import { startOutbox } from './messages.js';
 import { startFileSweeper } from './files.js';
 
 async function main() {
-  ctx.store = await openStore(config);
   const say = (m: string) => console.log(`[little-dipper] ${m}`);
-  say(`Store: ${{ sqlite: `SQLite (${config.dataDir}/${SQLITE_FILE})`, mongo: 'MongoDB', file: `local file (${config.dataDir}/store.json)` }[ctx.store.kind]}`);
+  ctx.store = await openStore(config, say);
+  say(`Store: SQLite (${config.dataDir}/${SQLITE_FILE})`);
   const { moved } = await bootNode(say);
   await runMigrations(say);
 

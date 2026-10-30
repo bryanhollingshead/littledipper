@@ -6,9 +6,10 @@
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import crypto from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 
 // ── minimal CBOR encoder (ints, bytes, text, maps) ──────────────────────
 function cborHead(major: number, n: number): Buffer {
@@ -98,6 +99,18 @@ async function claim(c: Client, claimUrl: string, name: string, key: SoftKey) {
 
 const ok = (cond: unknown, msg: string) => { if (!cond) throw new Error('FAIL: ' + msg); console.log('  ✓ ' + msg); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Turn a stopped node's SQLite database back into the JSON store.json nodes had before SQLite. */
+function toJsonStore(dir: string) {
+  const file = path.join(dir, 'little-dipper.db');
+  const db = new Database(file);
+  const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((t) => t.name);
+  const data = Object.fromEntries(tables.map((t) => [t, Object.fromEntries((db.prepare(`SELECT _id, doc FROM "${t}"`).all() as { _id: string; doc: string }[]).map((r) => [r._id, JSON.parse(r.doc)]))]));
+  db.close();
+  for (const f of [file, `${file}-wal`, `${file}-shm`]) if (existsSync(f)) unlinkSync(f);
+  writeFileSync(path.join(dir, 'store.json'), JSON.stringify(data));
+  return Object.values(data).reduce((n, docs) => n + Object.keys(docs).length, 0);
+}
 
 async function main() {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'ld-smoke-'));
@@ -403,11 +416,14 @@ async function main() {
     const convA = await a.call('GET', `/api/v1/messages/conversations/${cA.id}`);
     ok(convA.items.length === 2 && convA.items[1].id === answer.id && convA.items[1].inReplyTo === msg1.id, 'B replies and A sees the thread in order');
     // Offline recipient: queued now, delivered by the outbox once B is back.
-    B.proc.kill();
-    await sleep(300);
+    // B comes back as a node from before SQLite, so everything after this also runs on a migrated node.
+    await new Promise((r) => { B.proc.once('exit', r); B.proc.kill(); });
     const late = await a.call('POST', `/api/v1/messages/conversations/${cA.id}`, { body: 'Are you there?' });
     ok(late.status === 'queued', 'a message to an offline node is queued');
+    const docsB = toJsonStore(path.join(tmp, 'b'));
     B = await startNode(4202, path.join(tmp, 'b'));
+    ok(!existsSync(path.join(tmp, 'b', 'store.json')) && existsSync(path.join(tmp, 'b', 'store.json.migrated')) && existsSync(path.join(tmp, 'b', 'little-dipper.db')), `B restarts on a JSON store and moves its ${docsB} documents to SQLite`);
+    ok((await b.call('GET', '/api/v1/node/status')).claimed && (await b.call('GET', `/api/v1/messages/conversations/${cB.id}`)).items.length === 2, 'after the move B is still claimed, signed in and has its messages');
     let arrived = false;
     for (let i = 0; i < 40 && !arrived; i++) {
       await sleep(250);

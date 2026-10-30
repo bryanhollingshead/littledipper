@@ -6,13 +6,11 @@ services:
     plan: starter
     healthCheckPath: /api/v1/node/status
     envVars:
-      - key: MONGODB_URI
-        sync: false # paste a MongoDB Atlas connection string
       - key: LD_KEYSTORE_KEY
-        generateValue: true # keeps the node identity in the database, encrypted with this
+        generateValue: true # keeps the node identity in the database, encrypted with this secret
       - key: LD_DATA_DIR
         value: /data
-    disk:
+    disk: # the SQLite database, file contents and backups live here
       name: little-dipper-data
       mountPath: /data
       sizeGB: 1

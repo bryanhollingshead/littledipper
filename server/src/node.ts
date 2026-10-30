@@ -88,7 +88,7 @@ export async function checkClaimToken(token: string): Promise<NodeDoc | null> {
 export async function attachNode() {
   const ks = await loadKeystore(ctx.store);
   const n = await ctx.store.findOne<NodeDoc>('nodes', { type: 'node' });
-  if (!ks || !n) throw new Error('No Little Dipper here yet. Start the server once first (it creates the identity), with the same LD_DATA_DIR / MONGODB_URI.');
+  if (!ks || !n) throw new Error('No Little Dipper here yet. Start the server once first (it creates the identity), with the same LD_DATA_DIR.');
   ctx.keys = ks;
   return n;
 }

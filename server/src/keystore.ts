@@ -2,8 +2,8 @@
  * keystore://node/signing and the master data key.
  *
  * Two places it can live:
- *  - LD_KEYSTORE_KEY set (cloud installs with an ephemeral disk): stored in the
- *    database, encrypted with that key.
+ *  - LD_KEYSTORE_KEY set (cloud installs): stored in the database, encrypted with
+ *    that key, which stays in the host's secret settings rather than on the disk.
  *  - otherwise: a 0600 file in the data directory.
  *
  * The private key leaves this module only inside the encrypted recovery kit.

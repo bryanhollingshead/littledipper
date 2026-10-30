@@ -18,7 +18,7 @@ import { openStore } from './store/index.js';
 
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
-  ctx.store = await openStore(config);
+  ctx.store = await openStore(config, (m) => console.error(m));
   try {
     switch (cmd) {
       case 'claim-link': {
