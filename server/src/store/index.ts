@@ -185,9 +185,10 @@ class SqliteStore implements Store {
     return (this.db.prepare(`SELECT COUNT(*) AS n FROM "${coll}" ${sqlWhere(filter, params)}`).get(...params) as { n: number }).n;
   }
   async dump() {
-    return Object.fromEntries(COLLECTIONS.map((c) => [
+    // One read transaction: a consistent snapshot even if the CLI writes while a backup runs.
+    return this.db.transaction(() => Object.fromEntries(COLLECTIONS.map((c) => [
       c, (this.db.prepare(`SELECT doc FROM "${c}" ORDER BY rowid`).all() as { doc: string }[]).map((r) => JSON.parse(r.doc)),
-    ]));
+    ])))();
   }
   async restore(data: Record<string, Doc[]>) {
     this.db.transaction(() => {

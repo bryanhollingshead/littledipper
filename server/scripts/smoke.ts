@@ -4,7 +4,7 @@
  *
  *   npx tsx scripts/smoke.ts            (starts two servers on 4201/4202 in a temp dir)
  */
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import crypto from 'node:crypto';
 import { existsSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -99,6 +99,11 @@ async function claim(c: Client, claimUrl: string, name: string, key: SoftKey) {
 
 const ok = (cond: unknown, msg: string) => { if (!cond) throw new Error('FAIL: ' + msg); console.log('  ✓ ' + msg); };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Run the little-dipper CLI against a data directory; returns stdout, or throws with stderr. */
+function cli(dir: string, args: string[], input = '') {
+  return execFileSync('npx', ['tsx', 'src/cli.ts', ...args], { cwd: path.resolve(import.meta.dirname, '..'), env: { ...process.env, LD_DATA_DIR: dir }, input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+}
 
 /** Turn a stopped node's SQLite database back into the JSON store.json nodes had before SQLite. */
 function toJsonStore(dir: string) {
@@ -477,6 +482,21 @@ async function main() {
     const lines = (await exp.text()).trim().split('\n').map((l) => JSON.parse(l));
     ok(lines.some((l) => l.collection === 'fields' && l.value === 'X1234567'), 'export includes decrypted secret values');
     ok(!lines.some((l) => l.collection === 'apiKeys'), 'export excludes credential hashes');
+    const before = (await a.call('GET', '/api/v1/data/education')).items.length;
+    await a.call('POST', '/api/v1/data/education', { data: { institution: 'After the backup' } });
+    await a.call('POST', `/api/v1/node/backups/${bk._id ?? bk.id}/restore`);
+    ok((await a.call('GET', '/api/v1/data/education')).items.length === before, 'restoring a backup puts records back as they were');
+    const kit = await a.call('POST', '/api/v1/node/recovery-kit', { passphrase: 'correct horse battery' });
+    const kitFile = path.join(tmp, 'a.ldkit');
+    writeFileSync(kitFile, JSON.stringify(kit));
+    let refused = false;
+    try { cli(path.join(tmp, 'c'), ['restore-kit', kitFile], 'wrong passphrase\n'); } catch { refused = true; }
+    ok(refused && !existsSync(path.join(tmp, 'c', 'keystore.json')), 'a wrong recovery-kit passphrase restores nothing');
+    cli(path.join(tmp, 'c'), ['restore-kit', kitFile], 'correct horse battery\n');
+    const C = await startNode(4203, path.join(tmp, 'c'));
+    await new Promise((r) => { C.proc.once('exit', r); C.proc.kill(); });
+    const idOf = (dir: string) => JSON.parse(cli(dir, ['status'])).nodeId;
+    ok(idOf(path.join(tmp, 'c')) === idOf(path.join(tmp, 'a')) && idOf(path.join(tmp, 'a')) === kit.nodeId, 'the recovery kit brings back the same node identity on new hardware');
     console.log('\nAll good.');
   } finally {
     A.proc.kill(); B.proc.kill();
