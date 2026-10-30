@@ -101,7 +101,7 @@ Card and bank numbers are stored as the last four digits only, and the model has
 - **Fields**: each field is Standard, Sensitive or Secret. Secret values are AES-256-GCM encrypted at rest, masked in the API, never public, and every reveal is audited.
 - **Connections**: every peer→peer write is a signed envelope (ed25519 over canonical JSON, with a timestamp and a nonce for replay protection). Request → accept exchanges scoped bearer tokens both ways. Peers read `GET /peer/v1/profile` (the basic profile) and `GET /peer/v1/fields` (per-field extras). Rotate, disconnect and address-change are signed messages too. Requests are allowed by `connectRequests` (`off` / `fof` / `anyone`) or by a single-use invite link.
 - **Addresses**: the canonical address is a verified custom domain, otherwise the host address. Changing it sends `/peer/v1/address-change` to every connection. Retired domains redirect for 90 days.
-- **Backups**: nightly at 03:00, encrypted with the node's master key, kept 30 days. A recovery kit (passphrase-encrypted signing key + master key) restores the same identity on new hardware: `little-dipper restore-kit <file>`.
+- **Backups**: nightly at 03:00, encrypted with the node's master key, kept 30 days. A recovery kit (passphrase-encrypted signing key + master key) restores the same identity on new hardware (`little-dipper restore-kit <file>`), then `little-dipper restore-backup <file.ldbackup>` brings back the data. Settings → Backups saves `.ldbackup` files to the owner's device and reminds them weekly until one has.
 
 **Settings → Show technical details** turns on the Build reference pages (Data model, Endpoints) and the API Explorer.
 
@@ -110,7 +110,7 @@ Card and bank numbers are stored as the last four digits only, and the model has
 - Big Dipper itself doesn't exist yet. Settings → Big Dipper presents the services and saves the owner's choices; connecting works once `LD_BIG_DIPPER_URL` is set. The API docs site is out of scope, and **API docs** is a stub.
 - The "people my contacts know" (`fof`) check uses hashed mutual-contact hints supplied by the requester. These are not yet cryptographically verified.
 - The recovery kit holds the signing and backup keys, but not recovery codes, which are only ever stored hashed.
-- Backups go to the data directory only. S3-compatible destinations are not implemented.
+- Backups stay on the node and on the owner's device (download, or a chosen folder in Chrome and Edge). Other destinations such as S3 or Big Dipper are not built yet; see [docs/design/BACKUPS.md](docs/design/BACKUPS.md).
 - Requests can't ask for specific fields from the UI yet. The protocol supports `requestedFields`.
 
 ## Docs

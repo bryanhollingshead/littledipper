@@ -556,6 +556,25 @@ async function main() {
     await new Promise((r) => { C.proc.once('exit', r); C.proc.kill(); });
     const idOf = (dir: string) => JSON.parse(cli(dir, ['status'])).nodeId;
     ok(idOf(path.join(tmp, 'c')) === idOf(path.join(tmp, 'a')) && idOf(path.join(tmp, 'a')) === kit.nodeId, 'the recovery kit brings back the same node identity on new hardware');
+    ok((await a.call('GET', '/api/v1/node')).deviceBackup.due === true, 'with no copy on a device yet, a device backup is due');
+    const bundle = await a.call('GET', `/api/v1/node/backups/${bk._id ?? bk.id}/download`);
+    ok(bundle.format === 'ldbackup' && bundle.nodeId === kit.nodeId && /^enc:v1:[^:]+:[^:]+:[A-Za-z0-9+/=]+$/.test(bundle.data), 'a backup downloads as one encrypted file');
+    const dev = (await a.call('GET', '/api/v1/node')).deviceBackup;
+    ok(dev.due === false && dev.via === 'download' && dev.lastAt, 'downloading it counts as a copy on the device');
+    const bundleFile = path.join(tmp, 'a.ldbackup');
+    writeFileSync(bundleFile, JSON.stringify(bundle));
+    const fresh = path.join(tmp, 'e');
+    cli(fresh, ['restore-kit', kitFile], 'correct horse battery\n');
+    const said = cli(fresh, ['restore-backup', bundleFile]);
+    const E = await startNode(4204, fresh);
+    const statusE = await (await fetch('http://localhost:4204/api/v1/node/status')).json();
+    await new Promise((r) => { E.proc.once('exit', r); E.proc.kill(); });
+    const countRecords = (dir: string) => { const db = new Database(path.join(dir, 'little-dipper.db'), { readonly: true }); const n = (db.prepare('SELECT COUNT(*) AS n FROM records').get() as { n: number }).n; db.close(); return n; };
+    ok(said.includes('Restored the backup') && statusE.claimed && idOf(fresh) === kit.nodeId && countRecords(fresh) > 0 && countRecords(fresh) === countRecords(path.join(tmp, 'a')), 'kit + backup file bring the whole node back on new hardware');
+    let refusedAgain = false;
+    try { cli(fresh, ['restore-backup', bundleFile]); } catch { refusedAgain = true; }
+    ok(refusedAgain, 'restoring a file over a node that already has an owner is refused');
+    ok(Object.keys(bundle.blobs).length > 0 && Object.keys(bundle.blobs).every((id) => existsSync(path.join(fresh, 'blobs', id))), `document files travel in the backup file and come back (${Object.keys(bundle.blobs).length})`);
     console.log('\nAll good.');
   } finally {
     A.proc.kill(); B.proc.kill();

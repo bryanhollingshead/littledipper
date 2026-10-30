@@ -5,6 +5,7 @@ import { addr, bytes, copy, del, get, longDate, patch, post, put, saveFile, when
 import { Confirm, Dialog, Loading, Pills, QR, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { useAdmin } from './Layout';
 import BigDipperSetup from './BigDipperSetup';
+import { downloadBackup, useDeviceBackup } from '../../deviceBackup';
 
 type Tab = 'address' | 'hosting' | 'backups' | 'security' | 'big-dipper';
 const TABS: [Tab, string][] = [['address', 'Address'], ['hosting', 'Hosting'], ['backups', 'Backups'], ['security', 'Security'], ['big-dipper', 'Big Dipper']];
@@ -194,6 +195,47 @@ function HostingTab() {
 }
 
 type Backup = { _id: string; at: string; size: number; documents: number; reason: string; available: boolean };
+
+/**
+ * Copies on the owner's own device: nightly backups live on the same disk as the node, so one
+ * dead disk would take both. The story first, then the controls, as on Settings → Big Dipper.
+ */
+function OnThisDevice() {
+  const { node, refresh } = useAdmin();
+  const { run, busy } = useAction();
+  const dev = node.deviceBackup;
+  const d = useDeviceBackup(refresh);
+  const status = dev.lastAt
+    ? `Last saved here ${whenLabel(dev.lastAt)}${dev.via === 'folder' ? ', automatically' : ''}`
+    : 'No copy on a device yet';
+  return (
+    <div className="card" style={{ padding: '24px 26px', gap: 12, background: dev.due ? 'var(--color-accent-100)' : 'var(--color-accent-2-100)' }}>
+      <div className="card-kicker">On this device</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span aria-hidden style={{ width: 10, height: 10, borderRadius: '50%', background: dev.due ? 'var(--color-accent-500)' : 'var(--color-accent-2)' }} />
+        <span className="card-title" style={{ fontSize: 20 }}>{status}</span>
+      </div>
+      <div style={{ fontSize: 14, maxWidth: 640 }}>
+        Your Little Dipper backs itself up every night, but those copies sit on the same disk as everything else. Keep one here too, so a lost server never means lost records.
+        {d.supported ? ' Pick a folder once and each new backup is saved there whenever this app is open. A folder synced by iCloud Drive, Dropbox or OneDrive keeps them safe off this computer too.' : ' This browser can only download them; Chrome and Edge can also save to a folder automatically.'}
+      </div>
+      {d.folderName && (
+        <div style={{ fontSize: 13 }}>
+          {d.needsPermission ? <>Saving to <b>{d.folderName}</b> is paused until you allow it again.</> : <>Saving each new backup to <b>{d.folderName}</b>. The newest 14 are kept.</>}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {d.supported && !d.folderName && <button className="btn btn-primary" disabled={busy} onClick={() => run(d.choose, 'Saving backups to that folder')}>Save automatically to a folder…</button>}
+        {d.needsPermission && <button className="btn btn-primary" disabled={busy} onClick={() => run(d.allow, 'Saving again')}>Allow saving to {d.folderName}</button>}
+        <button className={`btn ${d.supported && !d.folderName ? 'btn-secondary' : d.needsPermission ? 'btn-secondary' : 'btn-primary'}`} disabled={busy} onClick={() => run(d.download, 'Backup saved to this device')}>Download a backup now</button>
+        {d.folderName && <button className="btn btn-ghost" onClick={d.stop}>Stop saving to {d.folderName}</button>}
+      </div>
+      <div className="text-muted" style={{ fontSize: 12, maxWidth: 640 }}>
+        The file is encrypted with your Little Dipper’s key, so it’s safe to keep anywhere. To restore it on a new server you also need your recovery kit and its passphrase: keep those somewhere else, like a password manager.
+      </div>
+    </div>
+  );
+}
 function BackupsTab() {
   const toast = useToast();
   const nav = useNavigate();
@@ -202,6 +244,7 @@ function BackupsTab() {
   const { data, reload } = useAsync(() => get<{ items: Backup[]; schedule: string; destination: string }>('/api/v1/node/backups'), []);
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
   if (!data) return <Loading />;
+  const saveRow = (b: Backup) => run(() => downloadBackup(b), 'Saved to this device').then(() => refresh());
   const exportAll = async () => {
     const r = await fetch('/api/v1/export', { credentials: 'same-origin' });
     if (!r.ok) return toast('Export failed');
@@ -217,6 +260,7 @@ function BackupsTab() {
   });
   return (
     <div style={{ display: 'grid', gap: 18 }}>
+      <OnThisDevice />
       <div className="card" style={{ padding: '22px 24px', gap: 10 }}>
         <div className="card-kicker">Schedule</div>
         <div style={{ fontSize: 15 }}>{data.schedule}</div>
@@ -235,7 +279,10 @@ function BackupsTab() {
               <tr key={b._id}>
                 <td>{whenLabel(b.at)}{b.reason !== 'scheduled' && <span className="text-muted" style={{ fontSize: 12 }}> · {b.reason.replace('-', ' ')}</span>}</td>
                 <td>{bytes(b.size)}</td><td>{b.documents}</td>
-                <td style={{ textAlign: 'right' }}>{b.available ? <button className="btn btn-ghost" onClick={() => restore(b)} style={{ fontSize: 13 }}>Restore</button> : <span className="text-muted" style={{ fontSize: 12 }}>File missing</span>}</td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{b.available ? <>
+                  <button className="btn btn-ghost" onClick={() => saveRow(b)} style={{ fontSize: 13 }}>Download</button>
+                  <button className="btn btn-ghost" onClick={() => restore(b)} style={{ fontSize: 13 }}>Restore</button>
+                </> : <span className="text-muted" style={{ fontSize: 12 }}>File missing</span>}</td>
               </tr>
             ))}
             {data.items.length === 0 && <tr><td colSpan={4} className="text-muted" style={{ fontSize: 14 }}>No backups yet. The first nightly backup runs at 03:00.</td></tr>}

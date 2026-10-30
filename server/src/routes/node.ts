@@ -6,7 +6,7 @@ import { fingerprint, encryptWithPassphrase, decrypt, isEncrypted } from '../cry
 import { audit, ownerActor, systemActor } from '../audit.js';
 import { bad, COOKIE, cookieOpts, HttpError, issueKey, rateLimit, requireOwner, requireSession, requireSetup, startSession, deviceLabel } from '../auth.js';
 import { canonicalUrl, checkClaimToken, descriptor, displayAddr, getNode, issueClaimLink, type NodeDoc } from '../node.js';
-import { createBackup, listBackups, restoreBackup } from '../backups.js';
+import { backupBundle, createBackup, deviceCopyStatus, listBackups, markDeviceCopy, restoreBackup } from '../backups.js';
 import { seedFields } from '../fields.js';
 import { runMigrations } from '../migrate.js';
 import { getOwner, getPendingOwner, type OwnerDoc } from '../owner.js';
@@ -84,6 +84,7 @@ async function nodeOut() {
     update: await updateInfo(),
     hosting: { provider: n.hosting.provider, label: config.hosting.label, region: n.hosting.region, store: 'SQLite', documents: docs },
     lastBackupAt: n.lastBackupAt || null,
+    deviceBackup: deviceCopyStatus(n),
     publicViewsToday: n.publicViews?.day === new Date().toISOString().slice(0, 10) ? n.publicViews.count : 0,
     claimedAt: n.claimedAt,
   };
@@ -228,7 +229,20 @@ export default async function nodeRoutes(app: FastifyInstance) {
   // ── backups, export, recovery kit ─────────────────────────────────────
   app.get('/api/v1/node/backups', async (req) => {
     await requireOwner(req, 'owner:read');
-    return { items: await listBackups(), schedule: 'Nightly at 03:00 · encrypted with your owner key · kept 30 days', destination: `${config.dataDir}/backups` };
+    return { items: await listBackups(), schedule: 'Nightly at 03:00 · encrypted with your owner key · kept 30 days', destination: `${config.dataDir}/backups`, deviceBackup: deviceCopyStatus(await getNode()) };
+  });
+
+  /** One backup as a single .ldbackup file for the owner's device. ?via=folder when the app saved it to their chosen folder. */
+  app.get('/api/v1/node/backups/:id/download', async (req, reply) => {
+    const p = await requireSession(req);
+    const { id } = req.params as { id: string };
+    const via = (req.query as { via?: string }).via === 'folder' ? 'folder' : 'download';
+    const { bundle, filename } = await backupBundle(id).catch(() => { throw new HttpError(404, 'backup_not_found', 'That backup is no longer on this node'); });
+    await markDeviceCopy(via);
+    if (via === 'download') await audit({ actor: ownerActor(p.key._id), action: 'backup.download', resource: `backups/${id}`, text: 'You saved a backup to your device', tone: 'owner' });
+    reply.header('content-type', 'application/json; charset=utf-8');
+    reply.header('content-disposition', `attachment; filename="${filename}"`);
+    return bundle;
   });
 
   app.post('/api/v1/node/backups', async (req, reply) => {

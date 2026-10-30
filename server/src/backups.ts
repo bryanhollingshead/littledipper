@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync,
 import path from 'node:path';
 import { config } from './config.js';
 import { ctx } from './ctx.js';
-import { decrypt, encrypt, newId } from './crypto.js';
+import { decrypt, encrypt, newId, nodeIdFromPublicKey } from './crypto.js';
 import { audit, systemActor } from './audit.js';
 import { getNode } from './node.js';
 import type { Doc } from './store/index.js';
@@ -77,6 +77,61 @@ export async function restoreBackup(id: string) {
   for (const f of data.files ?? []) {
     if (!(await ctx.store.getBlob(f._id)) && existsSync(blobFile(f._id))) await ctx.store.putBlob(f._id, readFileSync(blobFile(f._id)));
   }
+}
+
+// ── one-file backups for the owner's device ──────────────────────────────
+//
+// A .ldbackup file is a backup plus the document files it needs, in one JSON file, so it can be
+// kept anywhere: a laptop, a USB stick, a synced folder. The data is encrypted with the master key
+// exactly as on the node, and file contents were already encrypted before they were stored, so the
+// file is unreadable without the recovery kit.
+
+export type BackupBundle = { format: 'ldbackup'; v: 1; nodeId: string; at: string; documents: number; data: string; blobs: Record<string, string> };
+
+/** How long without a copy on the owner's device before Home starts asking. */
+export const DEVICE_COPY_DAYS = 7;
+
+export async function backupBundle(id: string): Promise<{ bundle: BackupBundle; filename: string }> {
+  const b = await ctx.store.get<BackupDoc>('backups', id);
+  if (!b || !existsSync(path.join(dir(), b.file))) throw new Error('backup not found');
+  const blobs: Record<string, string> = {};
+  for (const f of b.blobs ?? []) if (existsSync(blobFile(f))) blobs[f] = readFileSync(blobFile(f)).toString('base64');
+  const n = await getNode();
+  const stamp = b.at.slice(0, 16).replace('T', '-').replace(':', '');
+  return {
+    bundle: { format: 'ldbackup', v: 1, nodeId: n._id, at: b.at, documents: b.documents, data: readFileSync(path.join(dir(), b.file), 'utf8'), blobs },
+    filename: `little-dipper-${stamp}.ldbackup`,
+  };
+}
+
+/** Record that a backup reached the owner's device. */
+export async function markDeviceCopy(via: 'download' | 'folder') {
+  const n = await getNode();
+  await ctx.store.update('nodes', n._id, { lastDeviceCopyAt: new Date().toISOString(), lastDeviceCopyVia: via });
+}
+
+export function deviceCopyStatus(n: { lastDeviceCopyAt?: string | null; lastDeviceCopyVia?: string | null }) {
+  const last = n.lastDeviceCopyAt ?? null;
+  return { lastAt: last, via: n.lastDeviceCopyVia ?? null, remindAfterDays: DEVICE_COPY_DAYS, due: !last || Date.now() - Date.parse(last) > DEVICE_COPY_DAYS * 86400_000 };
+}
+
+/**
+ * Restore a .ldbackup file onto this node: its data and every document file. The node must
+ * already hold the same identity (on new hardware, restore the recovery kit first), since only
+ * that node's master key can read it.
+ */
+export async function restoreBundle(raw: string) {
+  let bundle: BackupBundle;
+  try { bundle = JSON.parse(raw); } catch { throw new Error('This isn’t a Little Dipper backup file.'); }
+  if (bundle?.format !== 'ldbackup' || typeof bundle.data !== 'string') throw new Error('This isn’t a Little Dipper backup file.');
+  const ks = ctx.keys;
+  if (nodeIdFromPublicKey(ks.signing.publicKey) !== bundle.nodeId) throw new Error(`This backup belongs to ${bundle.nodeId}. Restore that node's recovery kit first.`);
+  let data: Record<string, Doc[]>;
+  try { ({ data } = JSON.parse(decrypt(ks.masterKey, bundle.data)) as { data: Record<string, Doc[]> }); } catch { throw new Error('This backup can’t be read with this node’s key.'); }
+  const keep = await ctx.store.dump();
+  await ctx.store.restore({ ...data, backups: keep.backups, challenges: [] });
+  for (const [id, b64] of Object.entries(bundle.blobs ?? {})) await ctx.store.putBlob(id, Buffer.from(b64, 'base64'));
+  return { at: bundle.at, documents: bundle.documents, files: Object.keys(bundle.blobs ?? {}).length };
 }
 
 /** Nightly at 03:00 server time. */

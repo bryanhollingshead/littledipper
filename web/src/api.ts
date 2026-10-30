@@ -49,6 +49,8 @@ export type NodeInfo = {
   version: string; update: { current: string; latest: string; available: boolean; notes: string; canSelfUpdate: boolean };
   hosting: { provider: string; label: string; region: string; store: string; documents: number };
   lastBackupAt: string | null; publicViewsToday: number; claimedAt: string | null;
+  /** Whether a backup has reached the owner's own device lately; `due` drives the reminder. */
+  deviceBackup: { lastAt: string | null; via: 'download' | 'folder' | null; remindAfterDays: number; due: boolean };
 };
 export type MessageStatus = 'queued' | 'sent' | 'delivered' | 'failed' | 'received' | 'read';
 export type Message = {

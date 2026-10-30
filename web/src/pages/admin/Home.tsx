@@ -5,6 +5,7 @@ import { useAction, useAsync } from '../../ui';
 import { fetchCatalog, fmtDate, GROUPS } from '../../life';
 import { useAdmin } from './Layout';
 import AddContact from './AddContact';
+import { useDeviceBackup } from '../../deviceBackup';
 import { addDays, daysOf, lookOf, timeOf, ymd, type CalItem } from './Calendar';
 
 const greeting = () => {
@@ -17,6 +18,7 @@ export default function Home() {
   const { owner, node, refresh } = useAdmin();
   const nav = useNavigate();
   const { run } = useAction();
+  const device = useDeviceBackup(refresh);
   const [modal, setModal] = useState<null | 'add' | 'invite'>(null);
   const { data: reqs } = useAsync(() => get('/api/v1/federation/requests?status=pending&direction=in'), []);
   const { data: audit, reload } = useAsync(() => get<{ items: AuditEvent[] }>('/api/v1/audit?limit=6'), []);
@@ -30,6 +32,9 @@ export default function Home() {
     ...(attention?.items || []).slice(0, 3).map((a) => ({
       key: a.id + a.part, initials: initials(catalog?.find((d) => d.id === a.domain)?.label.replace('&', '') || a.domain), title: a.kind === 'deadline' ? `${a.part}: ${a.title}` : `${a.title} ${a.expired ? 'has expired' : 'expires soon'}`, sub: a.kind === 'deadline' && a.expired ? `Passed ${fmtDate(a.date)}` : `${a.part} ${fmtDate(a.date)}`, cta: 'Open', go: () => nav(`/admin/life/${a.domain}`),
     })),
+    // A backup on this device: asked for weekly, or when the browser paused saving to the chosen folder.
+    ...(device.needsPermission ? [{ key: 'device-allow', initials: '⤓', title: `Allow saving backups to ${device.folderName}`, sub: 'Your browser paused it after a restart', cta: 'Allow', go: () => run(device.allow, 'Saving backups again') }]
+      : node.deviceBackup.due ? [{ key: 'device-backup', initials: '⤓', title: node.deviceBackup.lastAt ? 'Save a fresh backup to this device' : 'Keep a backup on this device', sub: node.deviceBackup.lastAt ? `Last saved here ${whenLabel(node.deviceBackup.lastAt)}` : 'So far your backups are only on your Little Dipper', cta: 'Save', go: () => run(device.download, 'Backup saved to this device') }] : []),
     ...(node.update.available ? [{ key: 'update', initials: '↑', title: `Update ${node.update.latest} is ready`, sub: 'Release notes in Settings', cta: 'View', go: () => nav('/admin/settings/hosting') }] : []),
   ];
   const started = catalog?.filter((d) => d.count > 0).length ?? 0;

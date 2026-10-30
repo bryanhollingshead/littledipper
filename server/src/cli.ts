@@ -5,6 +5,7 @@
  *   little-dipper claim-link [--qr]   print a fresh 60-minute claim link (invalidates earlier ones)
  *   little-dipper status              show identity, address and claim state
  *   little-dipper restore-kit <file>  restore the node identity from a recovery kit
+ *   little-dipper restore-backup <file>  bring back a node's data from a .ldbackup file (after restore-kit on new hardware)
  */
 import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -15,6 +16,8 @@ import { decryptWithPassphrase, nodeIdFromPublicKey } from './crypto.js';
 import { loadKeystore, saveKeystore } from './keystore.js';
 import { attachNode, canonicalUrl, issueClaimLink } from './node.js';
 import { openStore } from './store/index.js';
+import { restoreBundle } from './backups.js';
+import { runMigrations } from './migrate.js';
 
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
@@ -48,11 +51,24 @@ async function main() {
         const secret = JSON.parse(decryptWithPassphrase(pass, kit));
         if (nodeIdFromPublicKey(secret.signing.publicKey) !== kit.nodeId) throw new Error('Kit is corrupt: key does not match its ID');
         await saveKeystore(ctx.store, { signing: secret.signing, masterKey: secret.masterKey });
-        console.log(`Restored identity ${kit.nodeId}. Restore a backup or start the server; contacts will find you at your new address once you send an address-change notice.`);
+        console.log(`Restored identity ${kit.nodeId}. Now restore a backup (little-dipper restore-backup <file.ldbackup>) or start the server; contacts will find you at your new address once you send an address-change notice.`);
+        return;
+      }
+      case 'restore-backup': {
+        const file = args[0];
+        if (!file) throw new Error('Usage: little-dipper restore-backup <file.ldbackup>');
+        const ks = await loadKeystore(ctx.store);
+        if (!ks) throw new Error('No identity here yet. On new hardware, run little-dipper restore-kit <file.ldkit> first.');
+        // A node already in use is restored from Settings → Backups, which takes a safety backup first.
+        if (await ctx.store.count('owners')) throw new Error('This node already has an owner. To go back to a backup, use Settings → Backups.');
+        ctx.keys = ks;
+        const r = await restoreBundle(readFileSync(file, 'utf8'));
+        await runMigrations();
+        console.log(`Restored the backup from ${r.at}: ${r.documents} documents and ${r.files} files. Start the server and sign in as before.`);
         return;
       }
       default:
-        console.log('Usage: little-dipper <claim-link [--qr] | status | restore-kit <file>>');
+        console.log('Usage: little-dipper <claim-link [--qr] | status | restore-kit <file> | restore-backup <file>>');
     }
   } finally {
     await ctx.store.close();

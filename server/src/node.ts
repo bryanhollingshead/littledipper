@@ -19,6 +19,9 @@ export type NodeDoc = Doc & {
   hosting: { provider: string; region: string };
   publicViews?: { day: string; count: number };
   lastBackupAt?: string | null;
+  /** When a backup last reached the owner's own device (downloaded, or saved to their chosen folder). */
+  lastDeviceCopyAt?: string | null;
+  lastDeviceCopyVia?: 'download' | 'folder' | null;
   blockedNodeIds?: string[];
   /** Big Dipper services the owner chose (saved even before Big Dipper exists). */
   bigDipper?: { services: string[]; settings: Record<string, string>; updatedAt: string };

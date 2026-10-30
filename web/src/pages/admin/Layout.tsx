@@ -3,6 +3,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-route
 import { addr, ApiError, copy, get, initials, patch, post, type NodeInfo, type Owner } from '../../api';
 import { Loading, useToast } from '../../ui';
 import { Icon, type IconName } from '../../icons';
+import { autoSave } from '../../deviceBackup';
 
 type Admin = {
   owner: Owner;
@@ -64,6 +65,13 @@ export default function AdminLayout() {
   }, []);
 
   useEffect(() => { load(); }, [load, n, loc.pathname]);
+  // While the app is open, save any new backup to the folder the owner chose on this device.
+  useEffect(() => {
+    const tick = () => autoSave().then((saved) => saved && setN((x) => x + 1));
+    tick();
+    const t = setInterval(tick, 30 * 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   if (authError) return <Navigate to="/login" replace />;
   if (!owner || !node) return <div style={{ padding: 48 }}><Loading /></div>;
