@@ -374,9 +374,19 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   // Line-item prices follow the currency of the first amount entered (a receipt's total).
   const currency = d.parts.filter((p) => p.type === 'money').map((p) => (vals[p.key] as { currency?: string } | undefined)?.currency).find(Boolean) || 'USD';
 
+  // Moving an event's start moves its end too, so it keeps how long it lasts (as calendars do).
+  const shiftsEnd = (k: string) => k === 'start' && d.parts.some((p) => p.key === 'end' && p.type === 'datetime');
   const set = (k: string, v: unknown) => {
-    setVals((s) => ({ ...s, [k]: v }));
-    setTouched((t) => new Set(t).add(k));
+    setVals((s) => {
+      const next = { ...s, [k]: v };
+      const was = s[k] as Partial<DateTime> | undefined, now = v as Partial<DateTime> | undefined, end = s.end as Partial<DateTime> | undefined;
+      if (shiftsEnd(k) && was?.at && now?.at && end?.at) {
+        const wall = (x: string) => Date.parse(`${x.slice(0, 16)}Z`); // wall-clock minutes; zones don't matter for a shift
+        next.end = { at: new Date(wall(end.at) + wall(now.at) - wall(was.at)).toISOString().slice(0, 16), tz: end.tz ?? now.tz };
+      }
+      return next;
+    });
+    setTouched((t) => { const n = new Set(t).add(k); if (shiftsEnd(k) && vals.end) n.add('end'); return n; });
   };
 
   const save = async () => {

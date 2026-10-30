@@ -100,12 +100,14 @@ pre.code { margin: 0; background: var(--color-neutral-900); color: var(--color-n
 .cal-day[data-weekend='1'] { background: color-mix(in srgb, var(--color-surface) 40%, var(--color-neutral-100)); }
 .cal-day[data-out='1'] { background: transparent; opacity: .5; }
 .cal-day:hover { background: var(--color-surface); }
-.cal-day[aria-pressed='true'] { border-color: var(--color-accent-500); background: var(--color-accent-100); }
+.cal-day[aria-selected='true'] { border-color: var(--color-accent-500); background: var(--color-accent-100); }
 .cal-num { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 50%; font-size: 13px; font-weight: 600; margin: 0 0 2px 2px; }
 .cal-day[data-today='1'] .cal-num { background: var(--color-accent); color: var(--color-bg); }
-.cal-chip { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 11.5px; line-height: 1.3; padding: 2px 8px; white-space: nowrap; }
+.cal-chip { cursor: pointer; display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 11.5px; line-height: 1.3; padding: 2px 8px; white-space: nowrap; }
 .cal-chip > span { overflow: hidden; text-overflow: ellipsis; }
-.cal-timed { padding: 1px 4px; gap: 5px; color: var(--color-text); }
+.cal-timed { padding: 1px 4px; gap: 5px; color: var(--color-text); border-radius: 8px; }
+.cal-timed:hover { background: var(--color-neutral-200); }
+.cal-chip:not(.cal-timed):hover { filter: brightness(.96); }
 .cal-more { font-size: 11px; color: var(--color-neutral-600); padding: 0 8px; }
 .cal-dots { display: none; }
 .cal-dot { width: 6px; height: 6px; border-radius: 50%; }

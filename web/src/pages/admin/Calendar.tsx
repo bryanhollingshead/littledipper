@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties, type MouseEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { get } from '../../api';
 import { ErrorNote, Loading, Pills, useAction, useAsync } from '../../ui';
@@ -151,14 +151,15 @@ export default function Calendar() {
                   const weekday = parse(day).getDay();
                   const shown = list.slice(0, 3);
                   return (
-                    <button key={day} className="cal-day" aria-pressed={day === selected} onClick={() => pick(day)}
+                    <div key={day} role="gridcell" tabIndex={0} className="cal-day" aria-selected={day === selected} onClick={() => pick(day)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(day); } }}
                       data-out={day.slice(0, 7) !== month ? '1' : '0'} data-today={day === today ? '1' : '0'} data-weekend={weekday === 0 || weekday === 6 ? '1' : '0'}
                       aria-label={`${parse(day).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}${list.length ? `, ${list.length} item${list.length === 1 ? '' : 's'}` : ''}`}>
                       <span className="cal-num">{+day.slice(8)}</span>
-                      {shown.map((i) => <Chip key={i.id} i={i} day={day} col={k % 7} />)}
+                      {shown.map((i) => <Chip key={i.id} i={i} day={day} col={k % 7} onOpen={open} />)}
                       {list.length > 3 && <span className="cal-more">+{list.length - 3} more</span>}
                       <span className="cal-dots" aria-hidden>{list.slice(0, 4).map((i) => <span key={i.id} className="cal-dot" style={{ background: lookOf(i).dot }} />)}</span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -182,16 +183,18 @@ export default function Calendar() {
  * One line in a day cell. All-day things are filled bars (joining up across the week when they
  * span days, titled on their first day); timed things are a quiet dot, time and title.
  */
-function Chip({ i, day, col }: { i: CalItem; day: string; col: number }) {
+function Chip({ i, day, col, onOpen }: { i: CalItem; day: string; col: number; onOpen: (i: CalItem) => void }) {
   const l = lookOf(i);
   const [s, e] = daysOf(i);
+  // Opens the item itself; a click on the rest of the cell still just picks the day.
+  const go = (ev: MouseEvent) => { ev.stopPropagation(); onOpen(i); };
   if (!i.allDay && i.start && s === e) {
     return (
-      <span className="cal-chip cal-timed" title={`${timeOf(i.start.at)} ${i.title}`}>
+      <button type="button" className="bare cal-chip cal-timed" onClick={go} title={`${timeOf(i.start.at)} ${i.title}`}>
         <span className="cal-dot" style={{ background: l.dot, flex: 'none' }} aria-hidden />
         <b style={{ fontWeight: 600, flex: 'none', color: 'var(--color-neutral-700)' }}>{shortTime(i.start.at)}</b>
         <span>{i.title}</span>
-      </span>
+      </button>
     );
   }
   const multi = s !== e;
@@ -204,10 +207,10 @@ function Chip({ i, day, col }: { i: CalItem; day: string; col: number }) {
   };
   const showTitle = !multi || day === s || col === 0;
   return (
-    <span className="cal-chip" style={style} title={labelOf(i)}>
+    <button type="button" className="bare cal-chip" style={style} onClick={go} title={labelOf(i)}>
       {!i.allDay && i.start && day === s && <b style={{ fontWeight: 600, flex: 'none' }}>{shortTime(i.start.at)}</b>}
       <span>{showTitle ? labelOf(i) : ' '}</span>
-    </span>
+    </button>
   );
 }
 
