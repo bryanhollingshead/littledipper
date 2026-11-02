@@ -186,7 +186,7 @@ export default function Setup() {
           <>
             <span className="tag tag-accent">Not set up yet</span>
             <h1 style={{ marginTop: 14, fontSize: 44, textWrap: 'pretty' }}>This Little Dipper is waiting for its owner.</h1>
-            <p style={{ fontSize: 17, maxWidth: 540, textWrap: 'pretty' }}>To claim it, open the claim link created when it was installed. Only the person who deployed it can get that link.</p>
+            <p style={{ fontSize: 17, maxWidth: 540, textWrap: 'pretty' }}>To claim it, you need the claim code (or claim link) made when it was set up. Only the person who set it up can see it. Where to find it depends on where it runs:</p>
             <Pills value={hostTab} onChange={setHostTab} options={Object.entries(HOST).map(([k, h]) => [k as HostTab, h.label])} style={{ margin: '24px 0 14px' }} />
             <div className="card" style={{ padding: '20px 24px', gap: 12 }}>
               <div style={{ fontSize: 14 }}>{host.text}</div>
