@@ -158,7 +158,7 @@ export default function Setup() {
             <h1 style={{ marginTop: 14, fontSize: 48, textWrap: 'pretty' }}>{mode === 'transfer' ? 'This Little Dipper is being handed to you.' : "Your Little Dipper is ready. Let's make it yours."}</h1>
             <p style={{ fontSize: 17, maxWidth: 540, textWrap: 'pretty' }}>
               Little Dipper is running at <strong>{nodeAddr}</strong>.{' '}
-              {mode === 'transfer' ? 'When you finish, the previous owner loses access and you become the owner.' : "You arrived from the installer, so we know you're the person who deployed it."} Setup takes about two minutes.
+              {mode === 'transfer' ? 'When you finish, the previous owner loses access and you become the owner.' : "Your claim link or code checks out, so we know you're the person who deployed it."} Setup takes about two minutes.
             </p>
             <p className="text-muted" style={{ fontSize: 14, maxWidth: 540 }}>Want a custom address like yourname.com? You can connect one any time later in Settings.</p>
             <div className="card" style={{ margin: '26px 0', gap: 10, padding: '22px 24px' }}>
@@ -168,7 +168,7 @@ export default function Setup() {
             </div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               <button className="btn btn-primary" onClick={() => setStep(1)} style={{ fontSize: 16, padding: '12px 26px' }}>Set up Little Dipper</button>
-              <span className="text-muted" style={{ fontSize: 13 }}>This link works once and expires 1 hour after it was created.</span>
+              <span className="text-muted" style={{ fontSize: 13 }}>Finish within an hour. If setup closes, start again with your claim link or code.</span>
             </div>
             {mode === 'claim' && (
               <div className="card" style={{ marginTop: 28, padding: '18px 22px', gap: 6, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', background: 'var(--color-neutral-100)' }}>

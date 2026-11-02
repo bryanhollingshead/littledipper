@@ -92,7 +92,10 @@ async function nodeOut() {
 }
 
 export default async function nodeRoutes(app: FastifyInstance) {
-  app.get('/.well-known/little-dipper', async () => {
+  app.get('/.well-known/little-dipper', async (req, reply) => {
+    // Public already, so any site may read it: Big Dipper's setup page checks a new node from the browser.
+    // Only this descriptor; the API stays same-origin.
+    reply.header('access-control-allow-origin', '*');
     const n = await getNode();
     const pp = await publicProfileDoc();
     return descriptor(n, n.claimed ? pp?.displayName || (await getOwner())?.displayName || null : null, pp?.connectRequests || 'off');

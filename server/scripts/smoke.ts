@@ -472,6 +472,9 @@ async function main() {
     console.log('messaging');
     const wk = await (await fetch(a.base + '/.well-known/little-dipper')).json();
     ok(wk.kind === 'node' && wk.capabilities?.includes('messages'), 'descriptor advertises the messages capability');
+    const wkRes = await fetch(a.base + '/.well-known/little-dipper', { headers: { origin: 'https://bryanhollingshead.github.io' } });
+    ok(wkRes.headers.get('access-control-allow-origin') === '*', 'any site can read the public descriptor (Big Dipper checks new nodes from the browser)');
+    ok((await fetch(a.base + '/api/node/status')).headers.get('access-control-allow-origin') === null, 'the API itself stays same-origin');
     const wkB = await (await fetch(b.base + '/.well-known/little-dipper')).json();
     ok(JSON.stringify(wk.capabilities) === JSON.stringify(wkB.capabilities), 'capabilities describe the release, not the owner: both nodes list the same');
     ok(['records', 'calendar.share', 'restore'].every((c) => wk.capabilities.includes(c)) && !JSON.stringify(wk.capabilities).includes('x_'), 'capabilities name features, never custom categories');
