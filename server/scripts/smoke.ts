@@ -499,7 +499,8 @@ async function main() {
     const docsB = toJsonStore(path.join(tmp, 'b'));
     B = await startNode(4202, path.join(tmp, 'b'));
     ok(!existsSync(path.join(tmp, 'b', 'store.json')) && existsSync(path.join(tmp, 'b', 'store.json.migrated')) && existsSync(path.join(tmp, 'b', 'little-dipper.db')), `B restarts on a JSON store and moves its ${docsB} documents to SQLite`);
-    ok((await b.call('GET', '/api/node/status')).claimed && (await b.call('GET', `/api/messages/conversations/${cB.id}`)).items.length === 2, 'after the move B is still claimed, signed in and has its messages');
+    ok((await b.call('GET', '/api/node/status')).claimed && (await b.call('GET', `/api/messages/conversations/${cB.id}`)).items.length >= 2, 'after the move B is still claimed, signed in and has its messages');
+    // (>= 2: A's outbox may already have delivered the queued message by now.)
     let arrived = false;
     for (let i = 0; i < 40 && !arrived; i++) {
       await sleep(250);

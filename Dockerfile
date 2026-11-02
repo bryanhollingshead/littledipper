@@ -8,7 +8,7 @@ COPY server/package.json server/
 COPY web/package.json web/
 RUN npm ci
 COPY . .
-RUN npm run build && npm prune --omit=dev
+RUN npm run build && npm prune --omit=dev && mkdir -p server/node_modules
 
 FROM node:22-alpine
 WORKDIR /app
@@ -16,6 +16,8 @@ ENV NODE_ENV=production PORT=4000 LD_DATA_DIR=/data
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/server/package.json server/
+# npm may install a server dependency here instead of the top level (better-sqlite3 does).
+COPY --from=build /app/server/node_modules server/node_modules
 COPY --from=build /app/server/dist server/dist
 COPY --from=build /app/web/dist web/dist
 # `docker exec little-dipper little-dipper claim-link`
