@@ -34,6 +34,8 @@ export type NodeDoc = Doc & {
 };
 
 export const CLAIM_TTL_MS = 60 * 60 * 1000;
+/** A claim token set by the installer (LD_CLAIM_TOKEN) lasts until the node is claimed; renewed at each boot. */
+export const PRESET_CLAIM_TTL_MS = 365 * 24 * 3600_000;
 
 export async function getNode(): Promise<NodeDoc> {
   const n = await ctx.store.findOne<NodeDoc>('nodes', { type: 'node' });
@@ -84,10 +86,10 @@ export function descriptor(n: NodeDoc, displayName: string | null, connectReques
 }
 
 /** Issue a fresh claim link. Invalidates any earlier one. */
-export async function issueClaimLink(mode: 'claim' | 'transfer' = 'claim', token?: string): Promise<{ url: string; expiresAt: string }> {
+export async function issueClaimLink(mode: 'claim' | 'transfer' = 'claim', token?: string, ttlMs?: number): Promise<{ url: string; expiresAt: string }> {
   const n = await getNode();
   const t = token || 'ct_' + randomToken(18);
-  const expiresAt = new Date(Date.now() + (mode === 'transfer' ? 24 * 3600_000 : CLAIM_TTL_MS)).toISOString();
+  const expiresAt = new Date(Date.now() + (ttlMs ?? (mode === 'transfer' ? 24 * 3600_000 : CLAIM_TTL_MS))).toISOString();
   await ctx.store.update('nodes', n._id, { claimTokenHash: sha256(t), claimTokenExpiresAt: expiresAt, claimMode: mode });
   return { url: `${canonicalUrl(n)}/claim?token=${t}`, expiresAt };
 }
@@ -157,12 +159,15 @@ export async function bootNode(log: (msg: string) => void) {
   const moved = await reconcileHost(n);
 
   if (!n.claimed) {
-    // An installer may pre-generate the token (e.g. Render's generateValue) and open /claim?token=… itself.
-    const envToken = process.env.LD_CLAIM_TOKEN;
+    // An installer may pre-generate the token (Railway's secret(), Render's generateValue) and open /claim?token=… itself.
+    // Only someone who can see the host's variables knows it, the same proof as reading the logs, so it works until
+    // the node is claimed: an owner who deploys today and comes back next week isn't locked out.
+    const envToken = process.env.LD_CLAIM_TOKEN?.trim();
     const valid = n.claimTokenExpiresAt && new Date(n.claimTokenExpiresAt).getTime() > Date.now();
-    if (envToken && !n.claimTokenHash) {
-      const { url } = await issueClaimLink('claim', envToken);
-      log(`Claim this node: ${url}`);
+    if (envToken && envToken.length < 16) log('LD_CLAIM_TOKEN is too short to be safe (16+ characters), so it was ignored.');
+    if (envToken && envToken.length >= 16) {
+      if (n.claimTokenHash !== sha256(envToken) || !valid) await issueClaimLink('claim', envToken, PRESET_CLAIM_TTL_MS);
+      log(`Claim this node: ${canonicalUrl(n)}/claim?token=${envToken}  (or paste LD_CLAIM_TOKEN on the setup page)`);
     } else if (!valid) {
       const { url } = await issueClaimLink();
       log(`Claim this node: ${url}`);

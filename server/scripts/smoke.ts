@@ -628,6 +628,23 @@ async function main() {
     const hello = await b.call('POST', `/api/messages/conversations/${mayaOnB.id}`, { body: 'Welcome back' });
     ok(hello.status === 'delivered' && (await f.call('GET', '/api/messages/unread')).count >= 1, 'and B can message the restored node straight away');
     await new Promise((r) => { F.proc.once('exit', r); F.proc.kill(); });
+
+    console.log('preset claim code');
+    // Railway's template sets LD_CLAIM_TOKEN; the owner may claim days later, after restarts.
+    const preset = 'rw' + crypto.randomBytes(16).toString('hex');
+    const gDir = path.join(tmp, 'g');
+    let G = await startNode(4206, gDir, { LD_CLAIM_TOKEN: preset });
+    extra.push(G.proc);
+    ok(new URL(G.claimUrl).searchParams.get('token') === preset, 'the node uses the claim code the installer set');
+    await new Promise((r) => { G.proc.once('exit', r); G.proc.kill(); });
+    const gdb = new Database(path.join(gDir, 'little-dipper.db'));
+    gdb.prepare("UPDATE nodes SET doc = json_set(doc, '$.claimTokenExpiresAt', '2020-01-01T00:00:00.000Z')").run(); // as if it had lapsed
+    gdb.close();
+    G = await startNode(4206, gDir, { LD_CLAIM_TOKEN: preset });
+    extra.push(G.proc);
+    const g = new Client('http://localhost:4206');
+    ok((await g.call('POST', '/api/node/claim', { token: preset })).setupSession, 'after a restart the same code still claims it, pasted on its own');
+    await new Promise((r) => { G.proc.once('exit', r); G.proc.kill(); });
     console.log('\nAll good.');
   } finally {
     A.proc.kill(); B.proc.kill();

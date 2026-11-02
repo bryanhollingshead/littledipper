@@ -4,6 +4,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_call: # the release workflow runs these first
 
 jobs:
   check:
@@ -32,3 +33,30 @@ jobs:
 
       - name: Smoke test (two nodes, end to end)
         run: npm run smoke -w server
+
+  image:
+    # The image friends deploy: it builds, boots on an empty volume and can be claimed with a preset code.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: littledipper:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Boot it like Railway would, then claim it
+        run: |
+          code="ci$(openssl rand -hex 16)"
+          docker volume create ld-data
+          docker run -d --name ld -p 4000:4000 -v ld-data:/data -e LD_CLAIM_TOKEN="$code" -e LD_KEYSTORE_KEY="$(openssl rand -hex 32)" littledipper:test
+          for i in $(seq 1 30); do curl -sf localhost:4000/api/node/status && break; sleep 1; done
+          curl -sf localhost:4000/.well-known/little-dipper | grep -q '"capabilities"'
+          curl -sf localhost:4000/ | grep -qi '<!doctype html>'
+          curl -sf -X POST localhost:4000/api/node/claim -H 'content-type: application/json' -d "{\"token\":\"$code\"}" | grep -q setupSession
+          docker exec ld little-dipper claim-link | grep -q 'claim?token='
+          echo "Image boots, serves the app and claims with the preset code."
+      - if: failure()
+        run: docker logs ld

@@ -6,9 +6,10 @@ import { Brand, Circle, Loading, Pills, useToast } from '../ui';
 import RestoreFromBackup from './Restore';
 
 type Status = { claimed: boolean; version: string; address: string; hosting: { label: string; region: string }; storage: string };
-type HostTab = 'render' | 'docker' | 'vps' | 'home';
+type HostTab = 'railway' | 'render' | 'docker' | 'vps' | 'home';
 
 const HOST: Record<HostTab, { label: string; text: string; cmd: string; out: (a: string) => string; note: string }> = {
+  railway: { label: 'Railway', text: 'Your claim code was made when you deployed. Only someone signed in to your Railway account can see it, so it proves the server is yours. It works until you claim.', cmd: 'Railway → your Little Dipper → Variables → LD_CLAIM_TOKEN', out: () => 'Copy the value (click the eye to reveal it) and paste it below', note: 'Started from Big Dipper? Its page has the same code and can bring you straight here.' },
   render: { label: 'Render / one-click', text: 'The install button opened your claim link automatically. If you closed that tab, the link is also in your service logs from the first boot.', cmd: 'Render → your service → Logs', out: (a) => `Claim this node: https://${a}/claim?token=ct_…`, note: 'Expired? Open the Render Shell and run: little-dipper claim-link' },
   docker: { label: 'Docker', text: 'The link prints to the container logs on first boot. Anyone who can read those logs controls the server, so it proves you deployed it.', cmd: '$ docker logs little-dipper | grep claim', out: (a) => `Claim this node: https://${a}/claim?token=ct_…`, note: 'Expired? Run: docker exec little-dipper little-dipper claim-link' },
   vps: { label: 'Server / VPS', text: 'Run the CLI on the machine. It prints a fresh link, valid for 1 hour, and invalidates any earlier one.', cmd: '$ sudo little-dipper claim-link', out: (a) => `https://${a}/claim?token=ct_…  (expires in 60 min)`, note: 'Headless box without a browser? Add --qr to print a QR code you can scan with your phone.' },
@@ -58,7 +59,7 @@ export default function Setup() {
     get<Status & { hosting: { label: string } }>('/api/node/status').then((s) => {
       setStatus(s);
       const l = s.hosting.label.toLowerCase();
-      setHostTab(l.includes('render') ? 'render' : l.includes('docker') ? 'docker' : 'vps');
+      setHostTab(l.includes('railway') ? 'railway' : l.includes('render') ? 'render' : l.includes('docker') ? 'docker' : 'vps');
     });
   }, []);
 
@@ -196,10 +197,10 @@ export default function Setup() {
               <div className="text-muted" style={{ fontSize: 12 }}>{host.note}</div>
             </div>
             <div className="field" style={{ marginTop: 20 }}>
-              <label htmlFor="claim">Paste your claim link</label>
-              <input id="claim" className="input mono" placeholder="https://…/claim?token=…" value={claimInput} onChange={(e) => { setClaimInput(e.target.value); setClaimError(false); }} onKeyDown={(e) => e.key === 'Enter' && submitClaim()} style={{ fontSize: 13, minHeight: 44 }} />
+              <label htmlFor="claim">Paste your claim link or code</label>
+              <input id="claim" className="input mono" placeholder="https://…/claim?token=…  or the code itself" value={claimInput} onChange={(e) => { setClaimInput(e.target.value); setClaimError(false); }} onKeyDown={(e) => e.key === 'Enter' && submitClaim()} style={{ fontSize: 13, minHeight: 44 }} />
             </div>
-            {claimError && <p style={{ color: 'var(--color-accent-700)', fontSize: 13, marginTop: 8 }}>That link isn't valid for this Little Dipper, or it has expired. Generate a fresh one with the command above.</p>}
+            {claimError && <p style={{ color: 'var(--color-accent-700)', fontSize: 13, marginTop: 8 }}>That link or code isn't valid for this Little Dipper, or it has expired. Check it against the steps above.</p>}
             <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
               <button className="btn btn-primary" disabled={busy || !claimInput.trim()} onClick={submitClaim}>Verify and continue</button>
             </div>

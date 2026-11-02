@@ -1,0 +1,59 @@
+# Tag a release (git tag v0.2.0 && git push origin v0.2.0) to publish the Little Dipper image.
+# Railway, Render and Docker run this image; Railway updates nodes to newer version tags on its own.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write # the GitHub release
+  packages: write # the image on ghcr.io
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag matches the version in the code
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          grep -q "\"version\": \"$v\"" package.json || { echo "package.json version isn't $v"; exit 1; }
+          grep -q "VERSION = '$v'" server/src/config.ts || { echo "server/src/config.ts VERSION isn't $v"; exit 1; }
+
+      - uses: docker/setup-qemu-action@v3 # arm64 too, for Raspberry Pis and other home devices
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/littledipper
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --title "Little Dipper ${GITHUB_REF_NAME#v}"

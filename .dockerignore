@@ -1,5 +1,14 @@
 node_modules
 **/node_modules
 **/dist
-data
 .git
+.github
+# Node data (keys, personal data, backups) never goes into an image or its build.
+data
+server/data*
+**/*.db
+**/*.db-*
+**/*.ldbackup
+**/*.ldkit
+.env*
+docs/plans
