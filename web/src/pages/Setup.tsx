@@ -154,31 +154,15 @@ export default function Setup() {
 
         {!restoring && step === 0 && verified === 'yes' && (
           <>
-            <span className="tag tag-accent-2">{mode === 'transfer' ? 'Transfer link verified' : 'Claim link verified'}</span>
-            <h1 style={{ marginTop: 14, fontSize: 48, textWrap: 'pretty' }}>{mode === 'transfer' ? 'This Little Dipper is being handed to you.' : "Your Little Dipper is ready. Let's make it yours."}</h1>
+            <span className="tag tag-accent-2">{mode === 'transfer' ? 'Transfer link verified' : 'It’s you'}</span>
+            <h1 style={{ marginTop: 14, fontSize: 48, textWrap: 'pretty' }}>{mode === 'transfer' ? 'This Little Dipper is being handed to you.' : 'Let’s make it yours.'}</h1>
             <p style={{ fontSize: 17, maxWidth: 540, textWrap: 'pretty' }}>
-              Little Dipper is running at <strong>{nodeAddr}</strong>.{' '}
-              {mode === 'transfer' ? 'When you finish, the previous owner loses access and you become the owner.' : "Your claim link or code checks out, so we know you're the person who deployed it."} Setup takes about two minutes.
+              {mode === 'transfer' ? 'When you finish, the previous owner loses access and you become the owner. It takes about two minutes.' : 'Your name, a passkey to sign in, and you’re in. About two minutes.'}
             </p>
-            <p className="text-muted" style={{ fontSize: 14, maxWidth: 540 }}>Want a custom address like yourname.com? You can connect one any time later in Settings.</p>
-            <div className="card" style={{ margin: '26px 0', gap: 10, padding: '22px 24px' }}>
-              {[['Address', nodeAddr], ['Hosted on', [status.hosting.label, status.hosting.region].filter(Boolean).join(' · ')], ['Version', `Little Dipper ${status.version}`], ['Storage', status.storage]].map(([k, v]) => (
-                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14, flexWrap: 'wrap' }}><span className="text-muted">{k}</span><span className="mono" style={{ fontSize: 13 }}>{v}</span></div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', marginTop: 24 }}>
               <button className="btn btn-primary" onClick={() => setStep(1)} style={{ fontSize: 16, padding: '12px 26px' }}>Set up Little Dipper</button>
-              <span className="text-muted" style={{ fontSize: 13 }}>Finish within an hour. If setup closes, start again with your claim link or code.</span>
+              {mode === 'claim' && <button className="btn btn-ghost" onClick={() => setRestoring(true)} style={{ fontSize: 14 }}>Coming back from a backup?</button>}
             </div>
-            {mode === 'claim' && (
-              <div className="card" style={{ marginTop: 28, padding: '18px 22px', gap: 6, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', background: 'var(--color-neutral-100)' }}>
-                <div style={{ flex: 1, minWidth: 240 }}>
-                  <div className="card-title">Coming back from a backup?</div>
-                  <div className="text-muted" style={{ fontSize: 13 }}>If you had a Little Dipper before, bring it back here with your recovery kit and a backup file.</div>
-                </div>
-                <button className="btn btn-secondary" onClick={() => setRestoring(true)}>Restore from a backup</button>
-              </div>
-            )}
           </>
         )}
 
