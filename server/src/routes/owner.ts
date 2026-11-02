@@ -18,7 +18,7 @@ async function sharingCounts(fields: FieldDoc[]) {
 }
 
 export default async function ownerRoutes(app: FastifyInstance) {
-  app.get('/api/v1/owner', async (req) => {
+  app.get('/api/owner', async (req) => {
     const p = await requireOwner(req, 'owner:read');
     const o = (await getOwner())!;
     const fields = await allFields();
@@ -29,7 +29,7 @@ export default async function ownerRoutes(app: FastifyInstance) {
     };
   });
 
-  app.patch('/api/v1/owner', async (req) => {
+  app.patch('/api/owner', async (req) => {
     const p = await requireOwner(req, 'owner:write');
     const o = (await getOwner())!;
     const body = (req.body || {}) as { displayName?: string; email?: string; prefs?: { showTechnical?: boolean } };
@@ -48,7 +48,7 @@ export default async function ownerRoutes(app: FastifyInstance) {
     return { id: out._id, displayName: out.displayName, email: out.email, prefs: out.prefs };
   });
 
-  app.get('/api/v1/owner/fields', async (req) => {
+  app.get('/api/owner/fields', async (req) => {
     await requireOwner(req, 'owner:read');
     const q = req.query as { section?: string; sensitivity?: string };
     const fields = (await allFields()).filter((f) => (!q.section || f.section === q.section) && (!q.sensitivity || f.sensitivity === q.sensitivity));
@@ -60,7 +60,7 @@ export default async function ownerRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/api/v1/owner/fields', async (req, reply) => {
+  app.post('/api/owner/fields', async (req, reply) => {
     const p = await requireOwner(req, 'owner:write');
     const body = (req.body || {}) as { label?: string; value?: string; sensitivity?: Sensitivity; section?: FieldDoc['section'] };
     const label = String(body.label || '').trim();
@@ -78,7 +78,7 @@ export default async function ownerRoutes(app: FastifyInstance) {
     return fieldOut(f);
   });
 
-  app.put('/api/v1/owner/fields/:key', async (req) => {
+  app.put('/api/owner/fields/:key', async (req) => {
     const p = await requireOwner(req, 'owner:write');
     const { key } = req.params as { key: string };
     const f = await ctx.store.findOne<FieldDoc>('fields', { key });
@@ -100,7 +100,7 @@ export default async function ownerRoutes(app: FastifyInstance) {
     return fieldOut((await ctx.store.get<FieldDoc>('fields', f._id))!);
   });
 
-  app.delete('/api/v1/owner/fields/:key', async (req) => {
+  app.delete('/api/owner/fields/:key', async (req) => {
     const p = await requireSession(req);
     const { key } = req.params as { key: string };
     const f = await ctx.store.findOne<FieldDoc>('fields', { key });
@@ -114,7 +114,7 @@ export default async function ownerRoutes(app: FastifyInstance) {
     return { deleted: true };
   });
 
-  app.post('/api/v1/owner/fields/:key/reveal', async (req) => {
+  app.post('/api/owner/fields/:key/reveal', async (req) => {
     const p = await requireOwner(req, 'owner:read');
     const { key } = req.params as { key: string };
     const f = await ctx.store.findOne<FieldDoc>('fields', { key });

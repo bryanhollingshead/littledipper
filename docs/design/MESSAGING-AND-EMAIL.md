@@ -55,7 +55,7 @@ Designed so the minimal version doesn't need to change shape when rich features 
 | `attempts`, `nextAttemptAt` | Outbox retries. |
 | `createdAt`, `sentAt`, `deliveredAt`, `readAt` | Timestamps. |
 
-On the wire: a signed envelope, as the existing peer messages already use, posted to `POST /peer/v1/messages`. The receiver's HTTP response confirms delivery. Read receipts, if they're added, are a separate message kind, and the owner can turn them off.
+On the wire: a signed envelope, as the existing peer messages already use, posted to `POST /peer/messages`. The receiver's HTTP response confirms delivery. Read receipts, if they're added, are a separate message kind, and the owner can turn them off.
 
 ## Minimal first version (proposed)
 

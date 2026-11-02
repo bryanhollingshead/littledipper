@@ -26,7 +26,7 @@ import { DataModel, Endpoints } from './pages/admin/Reference';
 
 /** "/" is the setup page until someone claims this Little Dipper, then the public profile. */
 function Root() {
-  const { data } = useAsync(() => get<{ claimed: boolean }>('/api/v1/node/status'), []);
+  const { data } = useAsync(() => get<{ claimed: boolean }>('/api/node/status'), []);
   if (!data) return <div style={{ padding: 48 }}><Loading /></div>;
   return data.claimed ? <PublicProfile /> : <Setup />;
 }

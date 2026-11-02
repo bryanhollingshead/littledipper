@@ -27,7 +27,7 @@ If people own their data, a dead disk, a closed hosting account or a lost server
 - **Download** (any browser): Settings → Backups → *Download a backup now* takes a fresh backup and downloads it. Each backup in the list also has *Download*.
 - **Automatic saving to a folder** (Chrome and Edge, through the File System Access API): the owner picks a folder once. While the app is open, it checks every 30 minutes and saves any newer backup there, keeping the newest 14 files it wrote and removing older ones. The folder choice is this browser's, kept in its IndexedDB, not on the node.
 - **When the browser forgets the permission** (common after a restart), saving pauses. Home shows *Allow saving backups to …*, and one click resumes it.
-- **Reminders:** the node records when a backup last reached a device (`lastDeviceCopyAt`, `via: download | folder`). After 7 days without one, `deviceBackup.due` is true and Home's *Needs you* asks for a fresh copy. Any skin can show the same reminder from `GET /api/v1/node`.
+- **Reminders:** the node records when a backup last reached a device (`lastDeviceCopyAt`, `via: download | folder`). After 7 days without one, `deviceBackup.due` is true and Home's *Needs you* asks for a fresh copy. Any skin can show the same reminder from `GET /api/node`.
 
 ### Restoring on new hardware
 
@@ -46,12 +46,12 @@ The recovery kit is the real point of failure. Without the kit and its passphras
 
 Session only (the owner's browser): backups hold everything.
 
-- `GET /api/v1/node/backups` → `{ items, schedule, destination, deviceBackup }`
-- `POST /api/v1/node/backups` → a new backup
-- `GET /api/v1/node/backups/{id}/download?via=download|folder` → the `.ldbackup` file; records the device copy
-- `POST /api/v1/node/backups/{id}/restore` → restore on this node
-- `POST /api/v1/node/claim/restore` `{ token, kit, passphrase, backup }` → restore onto a fresh, unclaimed node (claim link required; errors: `wrong_passphrase`, `not_a_kit`, `not_a_backup`, `backup_mismatch`, `backup_unreadable`)
-- `GET /api/v1/node` → includes `deviceBackup: { lastAt, via, remindAfterDays, due }`
+- `GET /api/node/backups` → `{ items, schedule, destination, deviceBackup }`
+- `POST /api/node/backups` → a new backup
+- `GET /api/node/backups/{id}/download?via=download|folder` → the `.ldbackup` file; records the device copy
+- `POST /api/node/backups/{id}/restore` → restore on this node
+- `POST /api/node/claim/restore` `{ token, kit, passphrase, backup }` → restore onto a fresh, unclaimed node (claim link required; errors: `wrong_passphrase`, `not_a_kit`, `not_a_backup`, `backup_mismatch`, `backup_unreadable`)
+- `GET /api/node` → includes `deviceBackup: { lastAt, via, remindAfterDays, due }`
 
 ## Options for later
 

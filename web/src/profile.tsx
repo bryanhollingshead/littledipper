@@ -1,4 +1,4 @@
-/** The public profile body, drawn from what /public/v1/profile returns. The editor preview uses the same component. */
+/** The public profile body, drawn from what /public/profile returns. The editor preview uses the same component. */
 import { useState } from 'react';
 import { initials, type FileRef } from './api';
 import { duration, fmtRange } from './life';

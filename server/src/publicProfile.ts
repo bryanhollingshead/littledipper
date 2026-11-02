@@ -73,7 +73,7 @@ export async function checkSections(input: unknown): Promise<PublicSection[]> {
   return out;
 }
 
-export const publicFileUrl = (id: string) => `/public/v1/profile/files/${id}`;
+export const publicFileUrl = (id: string) => `/public/profile/files/${id}`;
 
 /** Detail fields: Standard and Sensitive the owner switched on, with values. */
 export async function publicFields(pp: PublicProfileDoc) {

@@ -8,8 +8,8 @@ type Shared = { title: string; kind: string; date: string | null; pages: FileRef
 /** What someone without a Little Dipper sees when the owner shares a document with them. */
 export default function SharedDocument() {
   const { token = '' } = useParams();
-  const { data, error } = useAsync(() => get<Shared>(`/public/v1/shared/${encodeURIComponent(token)}`), [token]);
-  const url = (p: FileRef) => `/public/v1/shared/${encodeURIComponent(token)}/files/${p.id}`;
+  const { data, error } = useAsync(() => get<Shared>(`/public/shared/${encodeURIComponent(token)}`), [token]);
+  const url = (p: FileRef) => `/public/shared/${encodeURIComponent(token)}/files/${p.id}`;
   return (
     <div style={{ minHeight: '100%', background: 'var(--color-bg)', padding: '32px 16px 64px' }}>
       <div style={{ maxWidth: 860, margin: '0 auto' }}>

@@ -35,7 +35,7 @@ export type PartDef = {
 };
 
 export type DomainDef = {
-  /** URL segment and grant key: /api/v1/{id}. Custom domains are prefixed x_. */
+  /** URL segment and grant key: /api/data/{id}. Custom domains are prefixed x_. */
   id: string;
   label: string;
   /** Singular noun for one record, e.g. "residence". */

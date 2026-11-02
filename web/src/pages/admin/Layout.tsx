@@ -52,7 +52,7 @@ export default function AdminLayout() {
 
   const load = useCallback(async () => {
     try {
-      const [o, nd, reqs, unread, docs] = await Promise.all([get<Owner>('/api/v1/owner'), get<NodeInfo>('/api/v1/node'), get('/api/v1/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/v1/messages/unread'), get<{ items: unknown[] }>('/api/v1/documents?status=inbox')]);
+      const [o, nd, reqs, unread, docs] = await Promise.all([get<Owner>('/api/owner'), get<NodeInfo>('/api/node'), get('/api/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/messages/unread'), get<{ items: unknown[] }>('/api/documents?status=inbox')]);
       setOwner(o);
       setNode(nd);
       // Stranger requests under "Anyone" wait quietly: no badge.
@@ -79,11 +79,11 @@ export default function AdminLayout() {
   const tech = owner.prefs.showTechnical;
   const setTech = async (v: boolean) => {
     setOwner({ ...owner, prefs: { ...owner.prefs, showTechnical: v } });
-    await patch('/api/v1/owner', { prefs: { showTechnical: v } });
+    await patch('/api/owner', { prefs: { showTechnical: v } });
     if (!v && loc.pathname.startsWith('/admin/reference')) nav('/admin');
   };
   const signOut = async () => {
-    await post('/api/v1/auth/logout');
+    await post('/api/auth/logout');
     nav('/login', { replace: true });
   };
   const isOn = (to: string) => (to === '/admin' ? loc.pathname === '/admin' : loc.pathname.startsWith(to));

@@ -52,9 +52,9 @@ async function issueRecoveryCodes(o: OwnerDoc) {
 
 export default async function authRoutes(app: FastifyInstance) {
   // Setup step "You": name + recovery email.
-  app.post('/api/v1/owner', async (req) => {
+  app.post('/api/owner', async (req) => {
     const mode = await requireSetupOrSession(req);
-    if (mode !== 'setup') throw new HttpError(409, 'already_claimed', 'Use PATCH /api/v1/owner');
+    if (mode !== 'setup') throw new HttpError(409, 'already_claimed', 'Use PATCH /api/owner');
     const { displayName, email } = (req.body || {}) as { displayName?: string; email?: string };
     const name = String(displayName || '').trim();
     const mail = String(email || '').trim();
@@ -74,7 +74,7 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
   // ── passkey registration (setup or signed-in owner) ──────────────────
-  app.post('/api/v1/auth/passkeys/register/options', async (req) => {
+  app.post('/api/auth/passkeys/register/options', async (req) => {
     const mode = await requireSetupOrSession(req);
     const o = await needOwner(mode);
     const { rpID } = await rp(req);
@@ -87,7 +87,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return { challengeId: await saveChallenge(opts.challenge, 'register'), options: opts };
   });
 
-  app.post('/api/v1/auth/passkeys/register', async (req) => {
+  app.post('/api/auth/passkeys/register', async (req) => {
     const mode = await requireSetupOrSession(req);
     const o = await needOwner(mode);
     const { challengeId, response, label } = (req.body || {}) as { challengeId: string; response: never; label?: string };
@@ -106,13 +106,13 @@ export default async function authRoutes(app: FastifyInstance) {
     return { credentialId: rec.credentialId, label: rec.label };
   });
 
-  app.get('/api/v1/auth/passkeys', async (req) => {
+  app.get('/api/auth/passkeys', async (req) => {
     await requireSession(req);
     const o = await getOwner();
     return { items: (o?.passkeys || []).map((p) => ({ id: p.credentialId, label: p.label, createdAt: p.createdAt, lastUsedAt: p.lastUsedAt })) };
   });
 
-  app.delete('/api/v1/auth/passkeys/:id', async (req) => {
+  app.delete('/api/auth/passkeys/:id', async (req) => {
     const p = await requireSession(req);
     const o = (await getOwner())!;
     const { id } = req.params as { id: string };
@@ -124,7 +124,7 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
   // ── passkey sign-in ──────────────────────────────────────────────────
-  app.post('/api/v1/auth/passkeys/options', async (req) => {
+  app.post('/api/auth/passkeys/options', async (req) => {
     rateLimit(req, 'signin', 30, 15 * 60_000);
     const o = await getOwner();
     const { rpID } = await rp(req);
@@ -135,7 +135,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return { challengeId: await saveChallenge(opts.challenge, 'login'), options: opts };
   });
 
-  app.post('/api/v1/auth/passkeys/verify', async (req, reply) => {
+  app.post('/api/auth/passkeys/verify', async (req, reply) => {
     rateLimit(req, 'signin', 30, 15 * 60_000);
     const { challengeId, response } = (req.body || {}) as { challengeId: string; response: { id: string } };
     const expectedChallenge = await takeChallenge(challengeId, 'login');
@@ -155,7 +155,7 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
   // ── fallback: password + authenticator code ──────────────────────────
-  app.put('/api/v1/auth/password', async (req) => {
+  app.put('/api/auth/password', async (req) => {
     const p = await requireSession(req);
     const { password } = (req.body || {}) as { password?: string };
     if (!password || password.length < 12) throw bad('weak_password', 'Use at least 12 characters');
@@ -165,7 +165,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/api/v1/auth/totp/setup', async (req) => {
+  app.post('/api/auth/totp/setup', async (req) => {
     await requireSession(req);
     const o = (await getOwner())!;
     const secret = authenticator.generateSecret();
@@ -174,7 +174,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return { secret, otpauth: authenticator.keyuri(o.email, `Little Dipper (${new URL(canonicalUrl(n)).host})`, secret) };
   });
 
-  app.post('/api/v1/auth/totp/enable', async (req) => {
+  app.post('/api/auth/totp/enable', async (req) => {
     const p = await requireSession(req);
     const o = (await getOwner())!;
     const { code } = (req.body || {}) as { code?: string };
@@ -186,7 +186,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return { enabled: true };
   });
 
-  app.post('/api/v1/auth/fallback/disable', async (req) => {
+  app.post('/api/auth/fallback/disable', async (req) => {
     const p = await requireSession(req);
     const o = (await getOwner())!;
     await ctx.store.update('owners', o._id, { passwordHash: null, totp: { enabled: false, secretEnc: null, pendingSecretEnc: null } });
@@ -194,7 +194,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/api/v1/auth/password', async (req, reply) => {
+  app.post('/api/auth/password', async (req, reply) => {
     rateLimit(req, 'signin', 30, 15 * 60_000);
     const { password } = (req.body || {}) as { password?: string };
     const o = await getOwner();
@@ -205,7 +205,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return { next: 'totp' };
   });
 
-  app.post('/api/v1/auth/totp/verify', async (req, reply) => {
+  app.post('/api/auth/totp/verify', async (req, reply) => {
     rateLimit(req, 'signin', 30, 15 * 60_000);
     const mfa = await findKey(req.cookies[COOKIE.mfa], ['mfa']);
     if (!mfa) throw new HttpError(401, 'password_first', 'Enter your password first');
@@ -221,7 +221,7 @@ export default async function authRoutes(app: FastifyInstance) {
   });
 
   // ── recovery codes ───────────────────────────────────────────────────
-  app.post('/api/v1/auth/recovery-codes', async (req) => {
+  app.post('/api/auth/recovery-codes', async (req) => {
     const mode = await requireSetupOrSession(req);
     const o = await needOwner(mode);
     const codes = await issueRecoveryCodes(o);
@@ -229,7 +229,7 @@ export default async function authRoutes(app: FastifyInstance) {
     return { codes };
   });
 
-  app.post('/api/v1/auth/recovery', async (req, reply) => {
+  app.post('/api/auth/recovery', async (req, reply) => {
     rateLimit(req, 'recovery', 10, 15 * 60_000);
     const { code } = (req.body || {}) as { code?: string };
     const o = await getOwner();
@@ -243,14 +243,14 @@ export default async function authRoutes(app: FastifyInstance) {
     return { session: true, codesLeft: left };
   });
 
-  app.post('/api/v1/auth/logout', async (req, reply) => {
+  app.post('/api/auth/logout', async (req, reply) => {
     const k = await findKey(req.cookies[COOKIE.session], ['session']);
     if (k) await ctx.store.update('apiKeys', k._id, { revokedAt: new Date().toISOString() });
     reply.clearCookie(COOKIE.session, { path: '/' });
     return { ok: true };
   });
 
-  app.get('/api/v1/auth/security', async (req) => {
+  app.get('/api/auth/security', async (req) => {
     await requireSession(req);
     const o = (await getOwner())!;
     return {

@@ -26,7 +26,7 @@ export type Rec = {
 };
 export type ContactLite = { id: string; displayName: string };
 
-export const fetchCatalog = () => get<{ domains: Domain[] }>('/api/v1/catalog').then((r) => r.domains);
+export const fetchCatalog = () => get<{ domains: Domain[] }>('/api/catalog').then((r) => r.domains);
 
 // ── groups ─────────────────────────────────────────────────────────────
 export type Group = { id: string; label: string; blurb: string; ink: string; wash: string };
@@ -238,10 +238,10 @@ function RecordChanges({ d, rec, onRestored }: { d: Domain; rec: Rec; onRestored
   const [items, setItems] = useState<Version[] | null>(null);
   const toggle = async () => {
     setOpen(!open);
-    if (!items) { const x = await run(() => get<{ items: Version[] }>(`/api/v1/data/${d.id}/${rec.id}/history`)); if (x) setItems(x.items); }
+    if (!items) { const x = await run(() => get<{ items: Version[] }>(`/api/data/${d.id}/${rec.id}/history`)); if (x) setItems(x.items); }
   };
   const restore = async (v: Version) => {
-    const saved = await run(() => post<Rec>(`/api/v1/data/${d.id}/${rec.id}/history/${v.version}/restore`));
+    const saved = await run(() => post<Rec>(`/api/data/${d.id}/${rec.id}/history/${v.version}/restore`));
     if (saved) onRestored(saved);
   };
   return (
@@ -353,8 +353,8 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
     cta: doc.links.length > 1 ? 'Unlink' : 'Delete',
     onConfirm: async () => {
       const ok = doc.links.length > 1
-        ? await run(() => patch(`/api/v1/documents/${doc.id}`, { links: doc.links.filter((l) => l.recordId !== rec!.id) }))
-        : await run(() => del(`/api/v1/documents/${doc.id}`));
+        ? await run(() => patch(`/api/documents/${doc.id}`, { links: doc.links.filter((l) => l.recordId !== rec!.id) }))
+        : await run(() => del(`/api/documents/${doc.id}`));
       if (ok) setDocs((x) => x.filter((y) => y.id !== doc.id));
       setConfirm(null);
     },
@@ -408,7 +408,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
     }
     const body = { data, notes, ...(d.dated ? { validFrom: from || null, validTo: current ? null : to || null } : {}) };
     try {
-      const saved = rec ? await patch<Rec>(`/api/v1/data/${d.id}/${rec.id}`, body) : await post<Rec>(`/api/v1/data/${d.id}`, body);
+      const saved = rec ? await patch<Rec>(`/api/data/${d.id}/${rec.id}`, body) : await post<Rec>(`/api/data/${d.id}`, body);
       // Documents picked before the entry existed go up now, filed on it.
       for (const f of pending) await uploadDocument(f, { link: { domain: d.id, recordId: saved.id } }).catch((e) => setError(`${f.name}: ${(e as Error).message}`));
       onSaved(saved);
@@ -419,7 +419,7 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
 
   const remove = () => setConfirm({
     title: `Delete this ${d.noun}?`, body: `${rec!.title} is removed from your Little Dipper and from anyone you share ${d.label} with. You can bring it back from Recently deleted for 30 days.${docs.some((x) => x.links.length === 1) ? ' Documents filed only on it are deleted for good.' : ''}`, cta: 'Delete',
-    onConfirm: async () => { if (await run(() => del(`/api/v1/data/${d.id}/${rec!.id}`))) onSaved(); },
+    onConfirm: async () => { if (await run(() => del(`/api/data/${d.id}/${rec!.id}`))) onSaved(); },
   });
 
   const field = (p: Part) => (
@@ -549,7 +549,7 @@ export function ListTable({ p, rows, contacts }: { p: Part; rows: Row[]; contact
 
 export function useContactsLite() {
   const [list, setList] = useState<ContactLite[]>([]);
-  useEffect(() => { get<{ items: ContactLite[] }>('/api/v1/contacts').then((r) => setList(r.items)).catch(() => {}); }, []);
+  useEffect(() => { get<{ items: ContactLite[] }>('/api/contacts').then((r) => setList(r.items)).catch(() => {}); }, []);
   return list;
 }
 

@@ -146,7 +146,7 @@ async function saveChoices(keyId: string, c: Choice) {
 }
 
 export default async function bigDipperRoutes(app: FastifyInstance) {
-  app.get('/api/v1/big-dipper', async (req) => {
+  app.get('/api/big-dipper', async (req) => {
     await requireOwner(req, 'contacts:read');
     const n = await getNode();
     const link = await bigDipperLink();
@@ -168,7 +168,7 @@ export default async function bigDipperRoutes(app: FastifyInstance) {
   });
 
   /** Save which services and options the owner wants. A consent choice, so only the owner's own session. */
-  app.put('/api/v1/big-dipper', async (req) => {
+  app.put('/api/big-dipper', async (req) => {
     const p = await requireOwner(req, 'contacts:write');
     if (!p.isSession) throw bad('session_required');
     const choice = checkChoices((req.body || {}) as object);
@@ -177,7 +177,7 @@ export default async function bigDipperRoutes(app: FastifyInstance) {
   });
 
   /** Save the choice and send Big Dipper a connection request that names it. Big Dipper gets no profile or fields. */
-  app.post('/api/v1/big-dipper/connect', async (req, reply) => {
+  app.post('/api/big-dipper/connect', async (req, reply) => {
     const p = await requireOwner(req, 'contacts:write');
     if (!p.isSession) throw bad('session_required');
     const choice = checkChoices((req.body || {}) as object);

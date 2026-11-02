@@ -28,7 +28,7 @@ export default function ContactAccess({ c, fields, first, onGrants }: { c: Conta
   const dg = grants.domains || {};
 
   const send = async (body: object, msg?: string) => {
-    const g = await run(() => put<Grants>(`/api/v1/contacts/${c.id}/grants`, body), msg);
+    const g = await run(() => put<Grants>(`/api/contacts/${c.id}/grants`, body), msg);
     if (g) onGrants(g);
     return g;
   };

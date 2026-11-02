@@ -13,8 +13,8 @@ export default function ContactDetail() {
   const toast = useToast();
   const { tech, refresh } = useAdmin();
   const { run, busy } = useAction();
-  const { data: c, error, reload, setData } = useAsync(() => get<CD>(`/api/v1/contacts/${id}`), [id]);
-  const { data: fieldsResp } = useAsync(() => get<{ items: Field[] }>('/api/v1/owner/fields'), []);
+  const { data: c, error, reload, setData } = useAsync(() => get<CD>(`/api/contacts/${id}`), [id]);
+  const { data: fieldsResp } = useAsync(() => get<{ items: Field[] }>('/api/owner/fields'), []);
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(0);
@@ -31,30 +31,30 @@ export default function ContactDetail() {
 
   const accept = async () => {
     if (!c.request) return;
-    if (await run(() => post(`/api/v1/federation/requests/${c.request!.id}/accept`), 'Connected. Keys exchanged.')) { reload(); refresh(); }
+    if (await run(() => post(`/api/federation/requests/${c.request!.id}/accept`), 'Connected. Keys exchanged.')) { reload(); refresh(); }
   };
   const decline = async () => {
     if (!c.request) return;
-    if (await run(() => post(`/api/v1/federation/requests/${c.request!.id}/decline`), 'Request declined')) { refresh(); nav('/admin/contacts'); }
+    if (await run(() => post(`/api/federation/requests/${c.request!.id}/decline`), 'Request declined')) { refresh(); nav('/admin/contacts'); }
   };
-  const resend = () => c.request && run(() => post(`/api/v1/federation/requests/${c.request!.id}/resend`), 'Request re-sent');
+  const resend = () => c.request && run(() => post(`/api/federation/requests/${c.request!.id}/resend`), 'Request re-sent');
   const rotate = async () => {
-    if (await run(() => post(`/api/v1/federation/links/${c.node!.linkId}/rotate`), 'Keys rotated. Their Little Dipper was notified.')) reload();
+    if (await run(() => post(`/api/federation/links/${c.node!.linkId}/rotate`), 'Keys rotated. Their Little Dipper was notified.')) reload();
   };
   const disconnect = () => setConfirm({
     title: `Disconnect ${c.displayName}?`, body: 'They will no longer see anything you shared. They stay in your contacts.', cta: 'Disconnect',
     onConfirm: async () => {
-      const r = await run(() => del<{ peerNotified: boolean }>(`/api/v1/federation/links/${c.node!.linkId}`), (r) => (r.peerNotified ? 'Disconnected' : "Disconnected. Their Little Dipper couldn't be reached; it'll find out next time it asks."));
+      const r = await run(() => del<{ peerNotified: boolean }>(`/api/federation/links/${c.node!.linkId}`), (r) => (r.peerNotified ? 'Disconnected' : "Disconnected. Their Little Dipper couldn't be reached; it'll find out next time it asks."));
       setConfirm(null);
       if (r) reload();
     },
   });
   const remove = () => setConfirm({
     title: `Delete ${c.displayName}?`, body: isNode ? 'This disconnects you and removes them from your contacts.' : 'This removes them and everything you noted about them.', cta: 'Delete',
-    onConfirm: async () => { if (await run(() => del(`/api/v1/contacts/${c.id}`), `${c.displayName} deleted`)) nav('/admin/contacts'); setConfirm(null); },
+    onConfirm: async () => { if (await run(() => del(`/api/contacts/${c.id}`), `${c.displayName} deleted`)) nav('/admin/contacts'); setConfirm(null); },
   });
   const invite = async () => {
-    const r = await run(() => post<{ url: string; to: string; subject: string; body: string }>(`/api/v1/contacts/${c.id}/invite`));
+    const r = await run(() => post<{ url: string; to: string; subject: string; body: string }>(`/api/contacts/${c.id}/invite`));
     if (!r) return;
     await copy(`${r.body}`);
     toast(r.to ? `Invite message copied. Paste it into an email to ${r.to}.` : 'Invite message copied with your invite link');
@@ -156,7 +156,7 @@ export default function ContactDetail() {
               {s === 'active' && theirRows.length === 0 && !(c.sharedDomains || []).length && !c.syncError && <div className="text-muted" style={{ fontSize: 13, padding: '6px 0' }}>{first} isn't sharing anything with you yet.</div>}
               <div className="card-meta" style={{ marginTop: 10, flexWrap: 'wrap' }}>
                 {syncNote}
-                {s === 'active' && <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} disabled={busy} onClick={() => run(() => get<CD>(`/api/v1/contacts/${c.id}?sync=1`)).then((x) => x && setData(x))}>Refresh</button>}
+                {s === 'active' && <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} disabled={busy} onClick={() => run(() => get<CD>(`/api/contacts/${c.id}?sync=1`)).then((x) => x && setData(x))}>Refresh</button>}
               </div>
             </div>
           )}
@@ -217,5 +217,5 @@ export default function ContactDetail() {
 const TYPE_BY_LABEL: Record<string, string> = { email: 'email', phone: 'phone', mobile: 'phone', address: 'address', website: 'url' };
 function saveContact(id: string, e: { notes: string; methods: { type: string; label: string; value: string }[] }) {
   const methods = e.methods.filter((m) => m.value.trim()).map((m) => ({ ...m, type: TYPE_BY_LABEL[m.label.toLowerCase()] || m.type }));
-  return patch(`/api/v1/contacts/${id}`, { notes: e.notes, methods });
+  return patch(`/api/contacts/${id}`, { notes: e.notes, methods });
 }

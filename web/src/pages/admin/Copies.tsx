@@ -42,12 +42,12 @@ export function SendCopy({ catalog, start, contact, onClose, onSent }: { catalog
   const [note, setNote] = useState('');
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
   const [done, setDone] = useState<Created | null>(null);
-  const { data: people } = useAsync(() => (contact ? Promise.resolve({ items: [] as Contact[] }) : get<{ items: Contact[] }>('/api/v1/contacts')), []);
+  const { data: people } = useAsync(() => (contact ? Promise.resolve({ items: [] as Contact[] }) : get<{ items: Contact[] }>('/api/contacts')), []);
 
   const addDomain = async (id: string) => {
     const d = catalog.find((x) => x.id === id);
     if (!d || picks[id]) return;
-    const r = await run(() => get<{ items: Rec[] }>(`/api/v1/data/${id}`));
+    const r = await run(() => get<{ items: Rec[] }>(`/api/data/${id}`));
     if (!r) return;
     setPicks((p) => ({ ...p, [id]: { records: r.items, chosen: r.items.map((x) => x.id), includeSecret: d.sensitivity === 'secret' } }));
     setOrder((o) => (o.includes(id) ? o : [...o, id]));
@@ -71,7 +71,7 @@ export function SendCopy({ catalog, start, contact, onClose, onSent }: { catalog
       delivery, hours: Number(hours), note, confirm: confirmed,
     };
     try {
-      const r = await post<Created>('/api/v1/copies', body);
+      const r = await post<Created>('/api/copies', body);
       setDone(r);
       onSent?.();
       if (r.url && (await toClipboard(r.url))) toast('Link copied');
@@ -208,7 +208,7 @@ function CopyDone({ done, onClose }: { done: Created; onClose: () => void }) {
           <div className="field">
             <label>Download, then attach it to your email</label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {FORMATS.map(([f, l]) => <a key={f} className="btn btn-secondary" style={{ fontSize: 13 }} href={`/api/v1/copies/${c.id}/download?format=${f}`}>{l}</a>)}
+              {FORMATS.map(([f, l]) => <a key={f} className="btn btn-secondary" style={{ fontSize: 13 }} href={`/api/copies/${c.id}/download?format=${f}`}>{l}</a>)}
             </div>
             <div className="text-muted" style={{ fontSize: 12 }}>PDF to read or print, JSON for software, text for anything else.</div>
           </div>
@@ -233,7 +233,7 @@ const DELIVERY_LABEL = { link: 'Link', file: 'File', inline: 'In an email' };
 export function CopyList({ query, heading, showContact = true, version = 0 }: { query: string; heading?: React.ReactNode; showContact?: boolean; version?: number }) {
   const { run } = useAction();
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
-  const { data, reload } = useAsync(() => get<{ items: CopyOut[] }>(`/api/v1/copies?${query}`), [query, version]);
+  const { data, reload } = useAsync(() => get<{ items: CopyOut[] }>(`/api/copies?${query}`), [query, version]);
   if (!data?.items.length) return null;
   const status = (c: CopyOut) => {
     if (!c.link) return `${DELIVERY_LABEL[c.delivery]} · kept by them`;
@@ -254,11 +254,11 @@ export function CopyList({ query, heading, showContact = true, version = 0 }: { 
               {longDate(c.createdAt)} · {status(c)}{c.link ? ` · opened ${c.views} time${c.views === 1 ? '' : 's'}` : ''}{c.downloads ? ` · saved ${c.downloads}×` : ''}
             </div>
           </div>
-          {c.link?.active && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { if (await run(() => del(`/api/v1/copies/${c.id}`), 'Link turned off')) reload(); }}>Turn off</button>}
-          <a className="btn btn-ghost" style={{ fontSize: 12 }} href={`/api/v1/copies/${c.id}/download?format=pdf`}>PDF</a>
+          {c.link?.active && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { if (await run(() => del(`/api/copies/${c.id}`), 'Link turned off')) reload(); }}>Turn off</button>}
+          <a className="btn btn-ghost" style={{ fontSize: 12 }} href={`/api/copies/${c.id}/download?format=pdf`}>PDF</a>
           <button className="btn btn-ghost" style={{ fontSize: 12 }} aria-label="Delete from history" onClick={() => setConfirm({
             title: 'Delete this from your history?', body: `${c.link?.active ? 'The link stops working, and y' : 'Y'}ou won’t see this copy here any more. Anything they already saved stays with them.`, cta: 'Delete',
-            onConfirm: async () => { setConfirm(null); if (await run(() => del(`/api/v1/copies/${c.id}?forget=1`))) reload(); },
+            onConfirm: async () => { setConfirm(null); if (await run(() => del(`/api/copies/${c.id}?forget=1`))) reload(); },
           })}>×</button>
         </div>
       ))}

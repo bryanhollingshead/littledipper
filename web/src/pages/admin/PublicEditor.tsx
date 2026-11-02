@@ -27,10 +27,10 @@ export default function PublicEditor() {
   const { node } = useAdmin();
   const toast = useToast();
   const { run } = useAction();
-  const { data: pp, error, setData } = useAsync(() => get<PP>('/api/v1/public-profile'), []);
-  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/v1/owner/fields'), []);
-  const { data: opts } = useAsync(() => get<{ domains: Option[] }>('/api/v1/public-profile/options'), []);
-  const { data: docs, reload: reloadDocs } = useAsync(() => get<{ items: DocFull[] }>('/api/v1/documents?status=filed'), []);
+  const { data: pp, error, setData } = useAsync(() => get<PP>('/api/public-profile'), []);
+  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/owner/fields'), []);
+  const { data: opts } = useAsync(() => get<{ domains: Option[] }>('/api/public-profile/options'), []);
+  const { data: docs, reload: reloadDocs } = useAsync(() => get<{ items: DocFull[] }>('/api/documents?status=filed'), []);
   const [header, setHeader] = useState<{ displayName: string; headline: string } | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [about, setAbout] = useState<Record<number, string>>({});
@@ -45,7 +45,7 @@ export default function PublicEditor() {
   if (!pp || !fields || !header || !opts) return <Loading />;
 
   const save = async (body: Partial<Omit<PP, 'view'>>) => {
-    const r = await run(() => put<PP>('/api/v1/public-profile', body));
+    const r = await run(() => put<PP>('/api/public-profile', body));
     if (r) setData(r);
   };
   const editHeader = (k: 'displayName' | 'headline', v: string) => {
@@ -69,12 +69,12 @@ export default function PublicEditor() {
   const photo = async (f: File | undefined) => {
     if (!f) return;
     const img = await shrink(f);
-    const res = await fetch(`/api/v1/public-profile/avatar?name=${encodeURIComponent(f.name)}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': img.type || f.type }, body: img });
+    const res = await fetch(`/api/public-profile/avatar?name=${encodeURIComponent(f.name)}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': img.type || f.type }, body: img });
     const data = await res.json().catch(() => null);
     if (!res.ok) return toast(new ApiError(res.status, data?.code, data?.message || 'Upload failed').message);
     setData({ ...pp, view: { ...pp.view, avatarUrl: data.avatarUrl } });
   };
-  const dropPhoto = async () => { if (await run(() => del('/api/v1/public-profile/avatar'))) setData({ ...pp, view: { ...pp.view, avatarUrl: null } }); };
+  const dropPhoto = async () => { if (await run(() => del('/api/public-profile/avatar'))) setData({ ...pp, view: { ...pp.view, avatarUrl: null } }); };
 
   const domainOpt = (id: string) => opts.domains.find((d) => d.domain === id);
   const nameOf = (s: Section) => s.type === 'details' ? 'Details' : s.type === 'about' ? 'About' : s.type === 'resume' ? (s.title || 'Résumé') : (s.title || DOMAIN_TITLES[s.domain] || domainOpt(s.domain)?.label || s.domain);
@@ -102,7 +102,7 @@ export default function PublicEditor() {
     if (!doc) return;
     reloadDocs();
     // An upload from here is filed straight away: it's going on the profile.
-    await patch(`/api/v1/documents/${doc.id}`, { status: 'filed', title: 'Résumé' }).catch(() => {});
+    await patch(`/api/documents/${doc.id}`, { status: 'filed', title: 'Résumé' }).catch(() => {});
     if (i === undefined) add({ type: 'resume', documentId: doc.id });
     else update(i, { type: 'resume', documentId: doc.id });
   };

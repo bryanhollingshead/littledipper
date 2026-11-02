@@ -111,7 +111,7 @@ export function saveFile(name: string, content: string, type = 'application/json
 
 // ── files ──────────────────────────────────────────────────────────────
 export type FileRef = { id: string; name: string; type: string; size: number };
-export const fileUrl = (id: string) => `/api/v1/files/${id}`;
+export const fileUrl = (id: string) => `/api/files/${id}`;
 export const FILE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf';
 
 /** Phone photos are 3–8 MB; a receipt reads fine at 2000px. Anything the browser can't draw goes up as-is. */
@@ -143,9 +143,9 @@ export function uploadDocument(file: File, opts: { link?: { domain: string; reco
   const q = new URLSearchParams();
   if (opts.link) q.set('link', `${opts.link.domain}:${opts.link.recordId}`);
   if (opts.kind) q.set('kind', opts.kind);
-  return sendBytes<DocFull>(`/api/v1/documents?${q}`, file);
+  return sendBytes<DocFull>(`/api/documents?${q}`, file);
 }
-export const addPage = (docId: string, file: File) => sendBytes<DocFull>(`/api/v1/documents/${docId}/pages`, file);
+export const addPage = (docId: string, file: File) => sendBytes<DocFull>(`/api/documents/${docId}/pages`, file);
 
 export type DocLink = { domain: string; recordId: string };
 export type DocRef = { id: string; title: string; kind: string; date: string | null; status: 'inbox' | 'filed'; pages: FileRef[]; links: DocLink[] };

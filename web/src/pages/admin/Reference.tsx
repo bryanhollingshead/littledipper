@@ -9,7 +9,7 @@ type CatalogDomain = {
   feeds: string[]; scopes: { read: string; write: string }; schemaVersion: number;
   parts: { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; of?: { key: string; type: string }[] }[];
 };
-const useCatalog = () => useAsync(() => get<{ domains: CatalogDomain[] }>('/api/v1/catalog'), []).data?.domains;
+const useCatalog = () => useAsync(() => get<{ domains: CatalogDomain[] }>('/api/catalog'), []).data?.domains;
 
 export function DataModel() {
   const { tech } = useAdmin();
@@ -35,7 +35,7 @@ export function DataModel() {
           <div key={d.id} className="card" style={{ padding: '20px 22px', gap: 8, minWidth: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
               <div className="card-title" style={{ fontSize: 19 }}>{d.label}</div>
-              <span className="tag tag-neutral mono">/api/v1/{d.id}</span>
+              <span className="tag tag-neutral mono">/api/{d.id}</span>
             </div>
             <div className="card-body">{d.description}</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -74,14 +74,14 @@ export function Endpoints() {
   return (
     <div data-screen-label="Endpoints" style={{ maxWidth: 1100 }}>
       <h1>Endpoints</h1>
-      <p style={{ maxWidth: 700 }}>REST over HTTPS, JSON bodies, base path <span className="mono">/api/v1</span> for owner calls. The admin UI calls nothing else. Auth types: <strong>owner</strong> (session or API key with scopes), <strong>session</strong> (the owner's signed-in browser only), <strong>peer</strong> (signed requests or a token issued to a connected node), <strong>public</strong> (no auth), <strong>claim</strong> (one-time claim token or setup session).</p>
+      <p style={{ maxWidth: 700 }}>REST over HTTPS, JSON bodies, base path <span className="mono">/api</span> for owner calls. The admin UI calls nothing else. Auth types: <strong>owner</strong> (session or API key with scopes), <strong>session</strong> (the owner's signed-in browser only), <strong>peer</strong> (signed requests or a token issued to a connected node), <strong>public</strong> (no auth), <strong>claim</strong> (one-time claim token or setup session).</p>
       <div className="card" style={{ padding: '20px 24px', gap: 8, maxWidth: 820, marginTop: 18 }}>
         <div className="card-kicker">Address rules</div>
         <div style={{ fontSize: 14, display: 'grid', gap: 6 }}>
-          <div>1. The base address is configuration, never hard-coded. Every path is identical on any host: <span className="mono">{'{base}'}/api/v1/…</span></div>
+          <div>1. The base address is configuration, never hard-coded. Every path is identical on any host: <span className="mono">{'{base}'}/api/…</span></div>
           <div>2. The server answers on every bound address (host address, custom domain, IP) and ignores which one a request arrived on. <span className="mono">/.well-known/little-dipper</span> names the canonical one.</div>
           <div>3. Integrations store the permanent ID and public key; the address is only a last-known hint.</div>
-          <div>4. On address change the node sends a signed <span className="mono">/peer/v1/address-change</span> to every connection. Tokens stay valid.</div>
+          <div>4. On address change the node sends a signed <span className="mono">/peer/address-change</span> to every connection. Tokens stay valid.</div>
           <div>5. Old addresses keep answering with 301 redirects to the canonical address for at least 90 days.</div>
           <div>6. Cloud installs default to the provider hostname (e.g. <span className="mono">*.onrender.com</span>), never a raw IP, since provider IPs aren't stable.</div>
         </div>
@@ -113,7 +113,7 @@ export function Endpoints() {
             <tbody>
               {domains?.map((d) => (
                 <tr key={d.id}>
-                  <td className="mono" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>/api/v1/{d.id}</td>
+                  <td className="mono" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>/api/{d.id}</td>
                   <td style={{ fontSize: 13 }}>{d.label}</td>
                   <td className="mono text-muted" style={{ fontSize: 11 }}>{d.scopes.read} · {d.scopes.write}</td>
                 </tr>

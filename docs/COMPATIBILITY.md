@@ -8,17 +8,21 @@ These rules apply to every surface a party other than the code itself depends on
 
 | Surface | Who depends on it |
 |---|---|
-| `/api/v1/*` | The web app, owner tools and third-party apps holding API keys |
-| `/peer/v1/*` | Other Little Dipper nodes, running any release |
-| `/public/v1/*`, `/.well-known/little-dipper` | Anyone on the internet, including Big Dipper's verification |
+| `/api/*` | The web app, owner tools and third-party apps holding API keys |
+| `/peer/*` | Other Little Dipper nodes, running any release |
+| `/public/*`, `/.well-known/little-dipper` | Anyone on the internet, including Big Dipper's verification |
 | Stored data, backups, exports | Future releases of this code, and the people who own the data |
 | CLI commands and environment variables | Installers, hosts and operators |
 
 ---
 
-## I. There is no version. `/v1` is a name, not a number.
+## I. There is no version.
 
-The `/v1` in our paths is permanent, and no `/v2` will ever be added. Clients never compare version strings to decide what a node can do (see Commandment VII). The `version` field in the node descriptor is only for display and support.
+Paths carry no version number (`/api/data/receipts`, not `/api/v1/data/receipts`), and none will ever be added. The two things versions usually solve are handled another way:
+- **Changing the API without breaking anyone:** every change is additive (Commandment II). Something designed badly gets a better replacement next to it, and the old one keeps working.
+- **Knowing what the other side supports:** each node lists its capabilities (Commandment VII).
+
+Clients never compare version strings to decide what a node can do. The `version` field in the node descriptor is only for display and support.
 
 ## II. Thou shalt only add.
 
@@ -63,11 +67,43 @@ The error shape `{ code, message }` is frozen. `code` is part of the API. `messa
 
 ## VII. Detect features, never versions.
 
-Different releases constantly talk to each other over `/peer/v1`. A node must:
+Different releases constantly talk to each other over `/peer`. A node must:
 - Work with peers running **any earlier release** that is still out in the world, which in practice means all of them.
-- Advertise what it supports as a list of named **capabilities** in `/.well-known/little-dipper` (*not yet implemented*), and check the peer's list before using a newer feature.
+- Advertise what it supports as a list of named **capabilities** in `/.well-known/little-dipper`, and check the peer's list before using a newer feature. Apps and skins do the same.
 - Fall back gracefully when a peer lacks a capability. A missing capability is not an error.
 - Never remove a capability once it has been advertised.
+
+### Capabilities are not permissions
+
+| | Capabilities | Grants |
+|---|---|---|
+| Answers | What can this node's software do? | What may *this contact* see or do? |
+| Where | `/.well-known/little-dipper`, public | `/peer/domains` and friends, signed requests only |
+| Varies by | Release: every node on a release lists the same names | Relationship: different for every contact |
+| Changes | Only grows | Whenever the owner grants or revokes |
+
+The capability list never describes the owner's data: not which domains hold records, not counts, not custom categories. A capability isn't an offer: `calendar.share` means the software can share calendars, not that this owner shares theirs with you. Before using a feature with a peer, check both: the peer's capability, then the grant.
+
+### The capabilities
+
+| Name | Means |
+|---|---|
+| `records` | Records live at `/api/data/{domain}`; peers read granted domains at `/peer/domains/{domain}` |
+| `records.history` | Earlier versions and deleted records at `/api/data/{domain}/{id}/history` and `/api/data/{domain}/deleted` |
+| `records.provenance` | Records carry `updatedBy` and `updatedByLabel` |
+| `parts.datetime` | The `datetime` part type: `{ at, tz }` |
+| `calendar` | `GET /api/calendar` gathers dated items across domains |
+| `calendar.share` | Events can be granted to contacts and appear in their calendar |
+| `documents` | Documents and their pages at `/api/documents` |
+| `documents.share-links` | Documents can be shared by link (`/public/shared/{token}`) |
+| `copies` | Copies sent to contacts at `/api/copies` |
+| `messages` | Accepts messages at `/peer/messages` |
+| `address-change` | Accepts `/peer/address-change` when a contact moves |
+| `backups.device` | Backups can be downloaded to the owner's device |
+| `recovery-kit` | `POST /api/node/recovery-kit` produces a kit |
+| `restore` | A fresh node can be restored from a kit and a backup at `POST /api/node/claim/restore` |
+
+The list lives in `CAPABILITIES` in `server/src/node.ts`.
 
 ## VIII. Upgrades never lose data, and no release is skipped over.
 
@@ -76,7 +112,7 @@ Upgrades are the hardest layer in this design, so the rules here are the stricte
 2. **A release must boot on data written by any earlier release.** Operators may jump straight from a very old release to the latest, so required intermediate upgrades are not allowed.
 3. **Never destroy what you can't convert.** If a value can't be migrated safely, leave it exactly as it was. The existing migration does this: an address it can't parse stays a plain field.
 4. **Stored data is additive too.** You may add collections and fields. You may not reinterpret existing stored values in place. Write new fields and derive from them instead.
-5. **Back up before every update.** `POST /api/v1/node/update` already takes a `pre-update` backup. Every update path, including host-managed ones, should do the same.
+5. **Back up before every update.** `POST /api/node/update` already takes a `pre-update` backup. Every update path, including host-managed ones, should do the same.
 6. **Backups and exports from any release must restore or import into any later release.**
 7. **Rollback means restoring the pre-update backup.** We don't promise that older code can read data written by newer code, so the backup must always exist.
 
@@ -119,7 +155,6 @@ The current code doesn't meet these rules yet in a few places:
 
 - [ ] No OpenAPI spec exists yet.
 - [ ] Routes have no Fastify request or response schemas, so there's nothing to diff or validate against.
-- [ ] The node descriptor has no `capabilities` field.
 - [ ] Unknown request fields: current behavior is unverified.
 - [ ] No breaking-change check, contract tests, cross-release peer test or upgrade test in CI.
 - [ ] No release has been tagged as the compatibility baseline.

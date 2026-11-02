@@ -22,5 +22,5 @@ COPY --from=build /app/web/dist web/dist
 RUN chmod +x server/dist/cli.js && ln -s /app/server/dist/cli.js /usr/local/bin/little-dipper
 VOLUME /data
 EXPOSE 4000
-HEALTHCHECK CMD wget -qO- http://localhost:4000/api/v1/node/status || exit 1
+HEALTHCHECK CMD wget -qO- http://localhost:4000/api/node/status || exit 1
 CMD ["node", "server/dist/server.js"]

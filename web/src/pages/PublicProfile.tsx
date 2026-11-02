@@ -8,12 +8,12 @@ type Profile = ProfileViewData & { connectRequests: 'off' | 'fof' | 'anyone'; ad
 
 export default function PublicProfile() {
   const toast = useToast();
-  const { data: p, error } = useAsync(() => get<Profile>('/public/v1/profile'), []);
+  const { data: p, error } = useAsync(() => get<Profile>('/public/profile'), []);
   const [isOwner, setIsOwner] = useState(false);
   const [connect, setConnect] = useState(false);
 
   useEffect(() => {
-    get('/api/v1/owner').then(() => setIsOwner(true)).catch(() => {});
+    get('/api/owner').then(() => setIsOwner(true)).catch(() => {});
   }, []);
   useEffect(() => {
     if (p) document.title = p.displayName;

@@ -49,7 +49,7 @@ export function Dipper({ style }: { style?: React.CSSProperties }) {
 export default function BigDipperSetup() {
   const nav = useNavigate();
   const { run, busy } = useAction();
-  const { data: bd, reload } = useAsync(() => get<BigDipper>('/api/v1/big-dipper'), []);
+  const { data: bd, reload } = useAsync(() => get<BigDipper>('/api/big-dipper'), []);
   const [chosen, setChosen] = useState<string[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
   useEffect(() => { if (bd) { setChosen(bd.chosen); setSettings(bd.settings); } }, [bd]);
@@ -70,9 +70,9 @@ export default function BigDipperSetup() {
     return next;
   });
   const body = { services: chosen, settings };
-  const save = async () => { if (await run(() => put('/api/v1/big-dipper', body), 'Choices saved')) reload(); };
+  const save = async () => { if (await run(() => put('/api/big-dipper', body), 'Choices saved')) reload(); };
   const connect = async () => {
-    const r = await run(() => post<{ contactId: string }>('/api/v1/big-dipper/connect', body), 'Request sent to Big Dipper');
+    const r = await run(() => post<{ contactId: string }>('/api/big-dipper/connect', body), 'Request sent to Big Dipper');
     if (r) { reload(); nav(`/admin/contacts/${r.contactId}`); }
   };
 

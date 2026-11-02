@@ -4,7 +4,7 @@ services:
     name: little-dipper
     runtime: docker
     plan: starter
-    healthCheckPath: /api/v1/node/status
+    healthCheckPath: /api/node/status
     envVars:
       - key: LD_KEYSTORE_KEY
         generateValue: true # keeps the node identity in the database, encrypted with this secret

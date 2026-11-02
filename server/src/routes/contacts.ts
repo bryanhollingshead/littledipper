@@ -38,7 +38,7 @@ async function labelsFor(keys: string[]) {
 
 async function sendRequest(link: LinkDoc, offeredFields: string[], note: string, invite: string | null) {
   const offeredLabels = [...(await allFields()).filter((f) => f.sensitivity === 'standard' && f.value).map((f) => f.label), ...(await labelsFor(offeredFields))];
-  await sendSigned(link.peerUrl, '/peer/v1/requests', {
+  await sendSigned(link.peerUrl, '/peer/requests', {
     type: 'connect.request', requestId: link.requestId, to: link.peerNodeId, fromNode: await selfIntro(),
     offeredFields, offeredLabels, requestedFields: [], note, invite, mutualHints: await mutualHints(link.peerNodeId),
   });
@@ -81,7 +81,7 @@ export async function requestConnection(keyId: string, address: string, offeredF
 
 export default async function contactRoutes(app: FastifyInstance) {
   // ── contacts ─────────────────────────────────────────────────────────
-  app.get('/api/v1/contacts', async (req) => {
+  app.get('/api/contacts', async (req) => {
     await requireOwner(req, 'contacts:read');
     const q = req.query as { kind?: string; status?: string; q?: string };
     const all = await ctx.store.find<ContactDoc>('contacts', {}, { sort: { createdAt: -1 } });
@@ -92,7 +92,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/api/v1/contacts', async (req, reply) => {
+  app.post('/api/contacts', async (req, reply) => {
     const p = await requireOwner(req, 'contacts:write');
     const b = (req.body || {}) as { displayName?: string; org?: string; email?: string; phone?: string; address?: string; notes?: string; methods?: Method[] };
     const name = String(b.displayName || '').trim();
@@ -113,7 +113,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     return contactOut(c, { detail: true });
   });
 
-  app.get('/api/v1/contacts/:id', async (req) => {
+  app.get('/api/contacts/:id', async (req) => {
     await requireOwner(req, 'contacts:read');
     let c = await getContact((req.params as { id: string }).id);
     const link = await linkFor(c);
@@ -125,7 +125,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     return { ...(await contactOut(c, { detail: true })), syncError };
   });
 
-  app.patch('/api/v1/contacts/:id', async (req) => {
+  app.patch('/api/contacts/:id', async (req) => {
     const p = await requireOwner(req, 'contacts:write');
     const c = await getContact((req.params as { id: string }).id);
     const b = (req.body || {}) as { displayName?: string; org?: string; notes?: string; methods?: Method[] };
@@ -140,12 +140,12 @@ export default async function contactRoutes(app: FastifyInstance) {
     return contactOut((await ctx.store.get<ContactDoc>('contacts', c._id))!, { detail: true });
   });
 
-  app.delete('/api/v1/contacts/:id', async (req) => {
+  app.delete('/api/contacts/:id', async (req) => {
     const p = await requireOwner(req, 'contacts:write');
     const c = await getContact((req.params as { id: string }).id);
     const link = await linkFor(c);
     if (link && link.status === 'active') {
-      try { await sendSigned(link.peerUrl, '/peer/v1/links/revoke', { type: 'link.revoke' }); } catch { /* peer offline: our side still revokes */ }
+      try { await sendSigned(link.peerUrl, '/peer/links/revoke', { type: 'link.revoke' }); } catch { /* peer offline: our side still revokes */ }
     }
     if (link) { await revokeIssuedToken(link); await ctx.store.remove('nodeLinks', link._id); }
     await ctx.store.removeMany('grants', { contactId: c._id });
@@ -160,7 +160,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     return { deleted: true };
   });
 
-  app.get('/api/v1/contacts/:id/grants', async (req) => {
+  app.get('/api/contacts/:id/grants', async (req) => {
     await requireOwner(req, 'contacts:read');
     const c = await getContact((req.params as { id: string }).id);
     const g = await grantsFor(c._id);
@@ -171,7 +171,7 @@ export default async function contactRoutes(app: FastifyInstance) {
    * Body: { profile?: boolean, fields?: { [key]: boolean }, domains?: { [domain]: false | true | { scope?: 'all'|'current', includeSecret?: boolean } }, confirm?: boolean }
    * Secret fields, secret domains and includeSecret need confirm:true.
    */
-  app.put('/api/v1/contacts/:id/grants', async (req) => {
+  app.put('/api/contacts/:id/grants', async (req) => {
     const p = await requireOwner(req, 'contacts:write');
     const c = await getContact((req.params as { id: string }).id);
     if (c.kind !== 'node') throw bad('not_connected', 'Only contacts on Little Dipper can be granted access');
@@ -212,7 +212,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     return { profile: g.profile, fields: g.fields, domains: g.domains };
   });
 
-  app.post('/api/v1/contacts/:id/invite', async (req) => {
+  app.post('/api/contacts/:id/invite', async (req) => {
     await requireOwner(req, 'contacts:write');
     const c = await getContact((req.params as { id: string }).id);
     const inv = await createInvite('7d', []);
@@ -224,7 +224,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   // ── federation (owner side) ──────────────────────────────────────────
-  app.post('/api/v1/federation/lookup', async (req) => {
+  app.post('/api/federation/lookup', async (req) => {
     await requireOwner(req, 'contacts:write');
     const { address } = (req.body || {}) as { address?: string };
     const { origin, invite } = parsePeerInput(String(address || ''));
@@ -240,7 +240,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/api/v1/federation/requests', async (req, reply) => {
+  app.post('/api/federation/requests', async (req, reply) => {
     const p = await requireOwner(req, 'contacts:write');
     const b = (req.body || {}) as { address?: string; offeredFields?: string[]; note?: string };
     const out = await requestConnection(p.key._id, String(b.address || ''), b.offeredFields || [], String(b.note || ''), true);
@@ -248,7 +248,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     return out;
   });
 
-  app.get('/api/v1/federation/requests', async (req) => {
+  app.get('/api/federation/requests', async (req) => {
     await requireOwner(req, 'contacts:read');
     const q = req.query as { status?: string; direction?: string };
     for (const r of await ctx.store.find<RequestDoc>('connectionRequests', { status: 'pending' })) {
@@ -258,7 +258,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     return { items: items.map(({ signature, nonce, ...r }) => r) };
   });
 
-  app.post('/api/v1/federation/requests/:id/resend', async (req) => {
+  app.post('/api/federation/requests/:id/resend', async (req) => {
     await requireOwner(req, 'contacts:write');
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'out' || r.status !== 'pending') throw notFound('request_not_found');
@@ -268,7 +268,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     return { delivered: true };
   });
 
-  app.post('/api/v1/federation/requests/:id/accept', async (req) => {
+  app.post('/api/federation/requests/:id/accept', async (req) => {
     const p = await requireOwner(req, 'contacts:write');
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'in' || r.status !== 'pending') throw notFound('request_not_found');
@@ -277,7 +277,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     const { secret, doc } = await issuePeerToken(contact);
     let theirs: { token?: string };
     try {
-      theirs = await sendSigned(link.peerUrl, `/peer/v1/requests/${encodeURIComponent(r.requestId)}/accept`, { type: 'connect.accept', requestId: r.requestId, token: secret, version: (await getNode()).version }, link.peerSigningKey);
+      theirs = await sendSigned(link.peerUrl, `/peer/requests/${encodeURIComponent(r.requestId)}/accept`, { type: 'connect.accept', requestId: r.requestId, token: secret, version: (await getNode()).version }, link.peerSigningKey);
     } catch (e) {
       await ctx.store.update('apiKeys', doc._id, { revokedAt: now() });
       throw e;
@@ -295,14 +295,14 @@ export default async function contactRoutes(app: FastifyInstance) {
     return { status: 'active', grants: { profile: g.profile, fields: g.fields, domains: g.domains }, issuedToken: doc.prefix };
   });
 
-  app.post('/api/v1/federation/requests/:id/decline', async (req) => {
+  app.post('/api/federation/requests/:id/decline', async (req) => {
     const p = await requireOwner(req, 'contacts:write');
     const r = await ctx.store.get<RequestDoc>('connectionRequests', (req.params as { id: string }).id);
     if (!r || r.direction !== 'in' || r.status !== 'pending') throw notFound('request_not_found');
     const link = await ctx.store.get<LinkDoc>('nodeLinks', r.linkId);
     const contact = await ctx.store.get<ContactDoc>('contacts', r.contactId);
     if (link) {
-      try { await sendSigned(link.peerUrl, `/peer/v1/requests/${encodeURIComponent(r.requestId)}/decline`, { type: 'connect.decline', requestId: r.requestId }); } catch { /* best effort */ }
+      try { await sendSigned(link.peerUrl, `/peer/requests/${encodeURIComponent(r.requestId)}/decline`, { type: 'connect.decline', requestId: r.requestId }); } catch { /* best effort */ }
     }
     const { block } = (req.body || {}) as { block?: boolean };
     if (block) {
@@ -329,7 +329,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     return { id, url: `${canonicalUrl(n)}/connect?invite=${id}.${secret}`, expiresAt: doc.expiresAt, singleUse: true, offeredFields };
   }
 
-  app.post('/api/v1/federation/invites', async (req, reply) => {
+  app.post('/api/federation/invites', async (req, reply) => {
     const p = await requireOwner(req, 'contacts:write');
     const b = (req.body || {}) as { expiresIn?: string; offeredFields?: string[] };
     const fields = await allFields();
@@ -341,7 +341,7 @@ export default async function contactRoutes(app: FastifyInstance) {
   });
 
   // ── links ────────────────────────────────────────────────────────────
-  app.post('/api/v1/federation/links/:id/rotate', async (req) => {
+  app.post('/api/federation/links/:id/rotate', async (req) => {
     const p = await requireOwner(req, 'contacts:write');
     const link = await ctx.store.get<LinkDoc>('nodeLinks', (req.params as { id: string }).id);
     if (!link || link.status !== 'active') throw notFound('link_not_found');
@@ -349,7 +349,7 @@ export default async function contactRoutes(app: FastifyInstance) {
     const { secret, doc } = await issuePeerToken(contact);
     let theirs: { token?: string };
     try {
-      theirs = await sendSigned(link.peerUrl, '/peer/v1/links/rotate', { type: 'link.rotate', token: secret }, link.peerSigningKey);
+      theirs = await sendSigned(link.peerUrl, '/peer/links/rotate', { type: 'link.rotate', token: secret }, link.peerSigningKey);
     } catch (e) {
       await ctx.store.update('apiKeys', doc._id, { revokedAt: now() });
       throw e;
@@ -362,13 +362,13 @@ export default async function contactRoutes(app: FastifyInstance) {
     return { rotated: true, newTokenPrefix: doc.prefix };
   });
 
-  app.delete('/api/v1/federation/links/:id', async (req) => {
+  app.delete('/api/federation/links/:id', async (req) => {
     const p = await requireOwner(req, 'contacts:write');
     const link = await ctx.store.get<LinkDoc>('nodeLinks', (req.params as { id: string }).id);
     if (!link || link.status === 'revoked') throw notFound('link_not_found');
     const contact = await ctx.store.get<ContactDoc>('contacts', link.contactId);
     let notified = true;
-    try { await sendSigned(link.peerUrl, '/peer/v1/links/revoke', { type: 'link.revoke' }); } catch { notified = false; }
+    try { await sendSigned(link.peerUrl, '/peer/links/revoke', { type: 'link.revoke' }); } catch { notified = false; }
     await endLink(link, 'Disconnected');
     await audit({ actor: ownerActor(p.key._id), action: 'link.revoke', resource: `nodeLinks/${link._id}`, text: `You disconnected from ${contact?.displayName || displayAddr(link.peerUrl)}`, tone: 'owner' });
     return { status: 'revoked', peerNotified: notified };

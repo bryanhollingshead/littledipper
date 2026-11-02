@@ -27,10 +27,10 @@ Connections share live data with other Little Dippers. Most people the owner dea
 
 Session only (the owner's browser), like document share links: sending data out is an outward-facing act.
 
-- `POST /api/v1/copies` `{ items: [{ domain, recordIds?, includeSecret? }], to?: { contactId? | email, name? }, delivery: link|file|inline, hours?, note?, title?, confirm? }` → `{ copy, url, contact, email: { to, subject, body } }`
-- `GET /api/v1/copies?contactId=&domain=`, `GET /api/v1/copies/{id}`, `GET /api/v1/copies/{id}/download?format=pdf|json|txt`
-- `DELETE /api/v1/copies/{id}` turns the link off; `?forget=1` deletes the copy.
-- Public: `GET /public/v1/copies/{token}` and `/public/v1/copies/{token}/download?format=`. The page is `{address}/c/{token}`.
+- `POST /api/copies` `{ items: [{ domain, recordIds?, includeSecret? }], to?: { contactId? | email, name? }, delivery: link|file|inline, hours?, note?, title?, confirm? }` → `{ copy, url, contact, email: { to, subject, body } }`
+- `GET /api/copies?contactId=&domain=`, `GET /api/copies/{id}`, `GET /api/copies/{id}/download?format=pdf|json|txt`
+- `DELETE /api/copies/{id}` turns the link off; `?forget=1` deletes the copy.
+- Public: `GET /public/copies/{token}` and `/public/copies/{token}/download?format=`. The page is `{address}/c/{token}`.
 
 ## Not built
 

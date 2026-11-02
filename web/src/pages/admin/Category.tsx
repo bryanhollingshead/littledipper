@@ -26,8 +26,8 @@ export default function Category() {
   const { domain = '' } = useParams();
   const contacts = useContactsLite();
   const { data: catalog, reload: reloadCatalog } = useAsync(fetchCatalog, []);
-  const { data, error, reload } = useAsync(() => get<{ items: Rec[] }>(`/api/v1/data/${domain}`), [domain]);
-  const { data: deleted, reload: reloadDeleted } = useAsync(() => get<{ items: Version[]; keepDays: number }>(`/api/v1/data/${domain}/deleted`), [domain]);
+  const { data, error, reload } = useAsync(() => get<{ items: Rec[] }>(`/api/data/${domain}`), [domain]);
+  const { data: deleted, reload: reloadDeleted } = useAsync(() => get<{ items: Version[]; keepDays: number }>(`/api/data/${domain}/deleted`), [domain]);
   const { run } = useAction();
   const [editing, setEditing] = useState<Rec | 'new' | null>(null);
   const [sending, setSending] = useState(false);
@@ -40,7 +40,7 @@ export default function Category() {
   const current = d.dated ? data.items.filter((r) => r.current) : data.items;
   const past = d.dated ? data.items.filter((r) => !r.current) : [];
   const done = () => { setEditing(null); reload(); reloadCatalog(); reloadDeleted(); };
-  const bringBack = async (v: Version) => { if (await run(() => post(`/api/v1/data/${d.id}/${v.record.id}/history/${v.version}/restore`))) done(); };
+  const bringBack = async (v: Version) => { if (await run(() => post(`/api/data/${d.id}/${v.record.id}/history/${v.version}/restore`))) done(); };
 
   return (
     <div data-screen-label={d.label} style={{ maxWidth: 980 }}>
@@ -131,7 +131,7 @@ function RecordCard({ d, r, contacts, onEdit, quiet }: { d: Domain; r: Rec; cont
   const [revealed, setRevealed] = useState<Record<string, unknown> | null>(null);
   const reveal = async () => {
     if (revealed) return setRevealed(null);
-    const x = await run(() => post<Rec>(`/api/v1/data/${d.id}/${r.id}/reveal`));
+    const x = await run(() => post<Rec>(`/api/data/${d.id}/${r.id}/reveal`));
     if (x) setRevealed(x.data);
   };
   const range = fmtRange(r.validFrom, r.validTo);

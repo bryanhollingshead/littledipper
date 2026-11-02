@@ -27,7 +27,7 @@ export default function Documents() {
   const kinds = useDocKinds();
   const contacts = useContactsLite();
   const { data: catalog } = useAsync(fetchCatalog, []);
-  const { data, error, reload } = useAsync(() => get<{ items: DocFull[] }>('/api/v1/documents'), []);
+  const { data, error, reload } = useAsync(() => get<{ items: DocFull[] }>('/api/documents'), []);
   const [view, setView] = useState<View>(readView);
   const [filter, setFilter] = useState('all');
   const [q, setQ] = useState('');
@@ -65,9 +65,9 @@ export default function Documents() {
     changed();
   };
   const onDrop = (e: DragEvent) => { e.preventDefault(); setDragging(false); upload(Array.from(e.dataTransfer.files)); };
-  const accept = async (doc: DocFull, s: Suggestion) => { if (await run(() => post(`/api/v1/documents/${doc.id}/suggestions/${s.id}/accept`, {}), 'Added and filed')) changed(); };
-  const dismiss = async (doc: DocFull, s: Suggestion) => { if (await run(() => del(`/api/v1/documents/${doc.id}/suggestions/${s.id}`))) changed(); };
-  const fileIt = async (doc: DocFull) => { if (await run(() => patch(`/api/v1/documents/${doc.id}`, { status: 'filed' }))) changed(); };
+  const accept = async (doc: DocFull, s: Suggestion) => { if (await run(() => post(`/api/documents/${doc.id}/suggestions/${s.id}/accept`, {}), 'Added and filed')) changed(); };
+  const dismiss = async (doc: DocFull, s: Suggestion) => { if (await run(() => del(`/api/documents/${doc.id}/suggestions/${s.id}`))) changed(); };
+  const fileIt = async (doc: DocFull) => { if (await run(() => patch(`/api/documents/${doc.id}`, { status: 'filed' }))) changed(); };
 
   const open = all.find((x) => x.id === id);
 
@@ -188,8 +188,8 @@ export default function Documents() {
             onSaved={async (saved?: Rec) => {
               // Saved by hand from the suggestion: link the document, file it, clear the suggestion.
               if (saved) {
-                await patch(`/api/v1/documents/${editing.doc.id}`, { links: [...editing.doc.links.map(({ domain, recordId }) => ({ domain, recordId })), { domain: d.id, recordId: saved.id }], status: 'filed' });
-                await del(`/api/v1/documents/${editing.doc.id}/suggestions/${editing.s.id}`);
+                await patch(`/api/documents/${editing.doc.id}`, { links: [...editing.doc.links.map(({ domain, recordId }) => ({ domain, recordId })), { domain: d.id, recordId: saved.id }], status: 'filed' });
+                await del(`/api/documents/${editing.doc.id}/suggestions/${editing.s.id}`);
               }
               setEditing(null);
               changed();
@@ -221,8 +221,8 @@ function DocumentPanel({ doc, catalog, contacts, onClose, onChange }: { doc: Doc
   const [hours, setHours] = useState('168');
   const [newUrl, setNewUrl] = useState('');
   const [showText, setShowText] = useState(false);
-  const { data: shares, reload: reloadShares } = useAsync(() => get<{ items: Share[] }>(`/api/v1/documents/${doc.id}/shares`), [doc.id]);
-  const { data: candidates } = useAsync(() => (linkDomain ? get<{ items: Rec[] }>(`/api/v1/data/${linkDomain}`) : Promise.resolve({ items: [] as Rec[] })), [linkDomain]);
+  const { data: shares, reload: reloadShares } = useAsync(() => get<{ items: Share[] }>(`/api/documents/${doc.id}/shares`), [doc.id]);
+  const { data: candidates } = useAsync(() => (linkDomain ? get<{ items: Rec[] }>(`/api/data/${linkDomain}`) : Promise.resolve({ items: [] as Rec[] })), [linkDomain]);
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && viewing === null && !confirm && onClose();
@@ -230,16 +230,16 @@ function DocumentPanel({ doc, catalog, contacts, onClose, onChange }: { doc: Doc
     return () => window.removeEventListener('keydown', k);
   }, [onClose, viewing, confirm]);
 
-  const save = async (body: Record<string, unknown>) => { if (await run(() => patch(`/api/v1/documents/${doc.id}`, body))) onChange(); };
+  const save = async (body: Record<string, unknown>) => { if (await run(() => patch(`/api/documents/${doc.id}`, body))) onChange(); };
   const links = doc.links.map(({ domain, recordId }) => ({ domain, recordId }));
   const share = async () => {
-    const r = await run(() => post<{ url: string }>(`/api/v1/documents/${doc.id}/shares`, { hours: Number(hours) }));
+    const r = await run(() => post<{ url: string }>(`/api/documents/${doc.id}/shares`, { hours: Number(hours) }));
     if (r) { setNewUrl(r.url); reloadShares(); toast((await copy(r.url)) ? 'Link copied' : 'Link created'); }
   };
-  const unshare = async (s: Share) => { if (await run(() => del(`/api/v1/documents/${doc.id}/shares/${s.id}`))) reloadShares(); };
+  const unshare = async (s: Share) => { if (await run(() => del(`/api/documents/${doc.id}/shares/${s.id}`))) reloadShares(); };
   const remove = () => setConfirm({
     title: 'Delete this document?', body: `${doc.title} and its ${doc.pages.length === 1 ? 'page' : `${doc.pages.length} pages`} are deleted, and any share links stop working.`, cta: 'Delete',
-    onConfirm: async () => { if (await run(() => del(`/api/v1/documents/${doc.id}`))) { onChange(); onClose(); } },
+    onConfirm: async () => { if (await run(() => del(`/api/documents/${doc.id}`))) { onChange(); onClose(); } },
   });
   const linkable = catalog.filter((d) => d.documents || d.count > 0);
 
@@ -257,7 +257,7 @@ function DocumentPanel({ doc, catalog, contacts, onClose, onChange }: { doc: Doc
             {doc.pages.map((p, i) => (
               <div key={p.id} style={{ position: 'relative' }}>
                 <button className="bare" onClick={() => setViewing(i)} aria-label={`View page ${i + 1}`}><Thumb page={p} size={110} /></button>
-                {doc.pages.length > 1 && <button className="btn btn-secondary" aria-label={`Remove page ${i + 1}`} onClick={async () => { if (await run(() => del(`/api/v1/documents/${doc.id}/pages/${p.id}`))) onChange(); }} style={{ position: 'absolute', top: -6, right: -6, width: 24, height: 24, padding: 0, fontSize: 13 }}>×</button>}
+                {doc.pages.length > 1 && <button className="btn btn-secondary" aria-label={`Remove page ${i + 1}`} onClick={async () => { if (await run(() => del(`/api/documents/${doc.id}/pages/${p.id}`))) onChange(); }} style={{ position: 'absolute', top: -6, right: -6, width: 24, height: 24, padding: 0, fontSize: 13 }}>×</button>}
               </div>
             ))}
             <label style={{ width: 110, height: 110, borderRadius: 16, border: '1.5px dashed var(--color-neutral-400)', display: 'grid', placeItems: 'center', textAlign: 'center', fontSize: 12, cursor: 'pointer', color: 'var(--color-neutral-700)' }}>
@@ -296,8 +296,8 @@ function DocumentPanel({ doc, catalog, contacts, onClose, onChange }: { doc: Doc
               {doc.suggestions.map((s) => (
                 <div key={s.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 13, background: 'var(--color-accent-100)', borderRadius: 16, padding: '8px 12px' }}>
                   <span style={{ flex: 1, minWidth: 180 }}><strong>{catalog.find((d) => d.id === s.domain)?.label}:</strong> {summary(catalog.find((d) => d.id === s.domain), s, contacts)}</span>
-                  <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy} onClick={async () => { if (await run(() => post(`/api/v1/documents/${doc.id}/suggestions/${s.id}/accept`, {}), 'Added and filed')) onChange(); }}>Accept</button>
-                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { if (await run(() => del(`/api/v1/documents/${doc.id}/suggestions/${s.id}`))) onChange(); }}>Dismiss</button>
+                  <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy} onClick={async () => { if (await run(() => post(`/api/documents/${doc.id}/suggestions/${s.id}/accept`, {}), 'Added and filed')) onChange(); }}>Accept</button>
+                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { if (await run(() => del(`/api/documents/${doc.id}/suggestions/${s.id}`))) onChange(); }}>Dismiss</button>
                 </div>
               ))}
             </div>

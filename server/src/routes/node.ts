@@ -61,7 +61,7 @@ export async function announceAddress(log?: (m: string) => void) {
   const notified: string[] = [];
   for (const l of links) {
     try {
-      await sendSigned(l.peerUrl, '/peer/v1/address-change', { type: 'address.change', nodeId: n._id, newAddress: addr });
+      await sendSigned(l.peerUrl, '/peer/address-change', { type: 'address.change', nodeId: n._id, newAddress: addr });
       notified.push(displayAddr(l.peerUrl));
     } catch (e) {
       log?.(`address-change to ${l.peerUrl} failed: ${(e as Error).message}`);
@@ -98,7 +98,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
     return descriptor(n, n.claimed ? pp?.displayName || (await getOwner())?.displayName || null : null, pp?.connectRequests || 'off');
   });
 
-  app.get('/api/v1/node/status', async () => {
+  app.get('/api/node/status', async () => {
     const n = await getNode();
     const docs = await ctx.store.count('fields');
     return {
@@ -110,7 +110,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
   });
 
   // ── claim & setup ─────────────────────────────────────────────────────
-  app.post('/api/v1/node/claim', async (req, reply) => {
+  app.post('/api/node/claim', async (req, reply) => {
     rateLimit(req, 'claim', 20, 15 * 60_000);
     const { token } = (req.body || {}) as { token?: string };
     const raw = String(token || '').trim();
@@ -132,7 +132,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
    * before anything is written; afterwards the owner is signed in and connections are told the
    * new address. Backups carry document files, so this route takes large bodies.
    */
-  app.post('/api/v1/node/claim/restore', { bodyLimit: 512 * 1024 * 1024 }, async (req, reply) => {
+  app.post('/api/node/claim/restore', { bodyLimit: 512 * 1024 * 1024 }, async (req, reply) => {
     rateLimit(req, 'claim-restore', 20, 15 * 60_000);
     const b = (req.body || {}) as { token?: string; kit?: unknown; passphrase?: string; backup?: string };
     const raw = String(b.token || '').trim();
@@ -159,7 +159,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
     return { restored: true, nodeId: r.nodeId, at: r.at, documents: r.documents, files: r.files, address: canonicalUrl(await getNode()), movedFrom: r.moved };
   });
 
-  app.post('/api/v1/node/claim/complete', async (req, reply) => {
+  app.post('/api/node/claim/complete', async (req, reply) => {
     const setupKey = await requireSetup(req);
     const pending = await getPendingOwner();
     if (!pending) throw bad('owner_missing', 'Add your name first');
@@ -190,12 +190,12 @@ export default async function nodeRoutes(app: FastifyInstance) {
   });
 
   // ── owner-facing node settings ───────────────────────────────────────
-  app.get('/api/v1/node', async (req) => {
+  app.get('/api/node', async (req) => {
     await requireOwner(req, 'owner:read');
     return nodeOut();
   });
 
-  app.patch('/api/v1/node', async (req) => {
+  app.patch('/api/node', async (req) => {
     const p = await requireSession(req);
     const body = (req.body || {}) as { domain?: string | null };
     const n = await getNode();
@@ -218,7 +218,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
     return nodeOut();
   });
 
-  app.post('/api/v1/node/domain/check', async (req) => {
+  app.post('/api/node/domain/check', async (req) => {
     const p = await requireSession(req);
     const n = await getNode();
     const d = n.addresses.domain;
@@ -243,12 +243,12 @@ export default async function nodeRoutes(app: FastifyInstance) {
     return { ...checks, node: await nodeOut() };
   });
 
-  app.post('/api/v1/node/address-change/announce', async (req) => {
+  app.post('/api/node/address-change/announce', async (req) => {
     await requireSession(req);
     return announceAddress(req.log.warn.bind(req.log));
   });
 
-  app.post('/api/v1/node/update', async (req) => {
+  app.post('/api/node/update', async (req) => {
     const p = await requireSession(req);
     const u = await updateInfo();
     if (!u.available) return { status: 'up_to_date', version: u.current };
@@ -261,13 +261,13 @@ export default async function nodeRoutes(app: FastifyInstance) {
   });
 
   // ── backups, export, recovery kit ─────────────────────────────────────
-  app.get('/api/v1/node/backups', async (req) => {
+  app.get('/api/node/backups', async (req) => {
     await requireOwner(req, 'owner:read');
     return { items: await listBackups(), schedule: 'Nightly at 03:00 · encrypted with your owner key · kept 30 days', destination: `${config.dataDir}/backups`, deviceBackup: deviceCopyStatus(await getNode()) };
   });
 
   /** One backup as a single .ldbackup file for the owner's device. ?via=folder when the app saved it to their chosen folder. */
-  app.get('/api/v1/node/backups/:id/download', async (req, reply) => {
+  app.get('/api/node/backups/:id/download', async (req, reply) => {
     const p = await requireSession(req);
     const { id } = req.params as { id: string };
     const via = (req.query as { via?: string }).via === 'folder' ? 'folder' : 'download';
@@ -279,7 +279,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
     return bundle;
   });
 
-  app.post('/api/v1/node/backups', async (req, reply) => {
+  app.post('/api/node/backups', async (req, reply) => {
     const p = await requireSession(req);
     const b = await createBackup('manual');
     await audit({ actor: ownerActor(p.key._id), action: 'backup.create', resource: `backups/${b._id}`, text: `Backup completed · ${b.documents} documents`, tone: 'system' });
@@ -287,7 +287,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
     return b;
   });
 
-  app.post('/api/v1/node/backups/:id/restore', async (req) => {
+  app.post('/api/node/backups/:id/restore', async (req) => {
     const p = await requireSession(req);
     const { id } = req.params as { id: string };
     await restoreBackup(id);
@@ -296,7 +296,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
     return { restored: true };
   });
 
-  app.get('/api/v1/export', async (req, reply) => {
+  app.get('/api/export', async (req, reply) => {
     const p = await requireOwner(req, 'export');
     const dump = await ctx.store.dump();
     const lines: string[] = [];
@@ -324,7 +324,7 @@ export default async function nodeRoutes(app: FastifyInstance) {
     return lines.join('\n') + '\n';
   });
 
-  app.post('/api/v1/node/recovery-kit', async (req, reply) => {
+  app.post('/api/node/recovery-kit', async (req, reply) => {
     const p = await requireSession(req);
     const { passphrase } = (req.body || {}) as { passphrase?: string };
     if (!passphrase || passphrase.length < 10) throw bad('weak_passphrase', 'Use a passphrase of at least 10 characters');
@@ -338,14 +338,14 @@ export default async function nodeRoutes(app: FastifyInstance) {
   });
 
   // ── danger zone ──────────────────────────────────────────────────────
-  app.post('/api/v1/node/transfer', async (req) => {
+  app.post('/api/node/transfer', async (req) => {
     const p = await requireSession(req);
     const link = await issueClaimLink('transfer');
     await audit({ actor: ownerActor(p.key._id), action: 'node.transfer', resource: 'nodes', text: 'You created an ownership transfer link', tone: 'owner' });
     return link;
   });
 
-  app.post('/api/v1/node/reset', async (req, reply) => {
+  app.post('/api/node/reset', async (req, reply) => {
     await requireSession(req);
     const { confirm } = (req.body || {}) as { confirm?: string };
     if (confirm !== 'RESET') throw bad('confirm_required');

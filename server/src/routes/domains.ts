@@ -1,5 +1,5 @@
 /**
- * Domain endpoints: one per category of personal data (/api/v1/data/employment, /api/v1/data/residences…),
+ * Domain endpoints: one per category of personal data (/api/data/employment, /api/data/residences…),
  * plus the catalog that describes them and a cross-domain timeline.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -63,14 +63,14 @@ function catalogEntry(d: DomainDef, sum: Summary) {
     parts: d.parts.map((p) => ({ ...p, sensitivity: partSens(d, p) })),
     ...sum,
     scopes: { read: `${d.id}:read`, write: `${d.id}:write` },
-    endpoint: `/api/v1/data/${d.id}`,
+    endpoint: `/api/data/${d.id}`,
     feeds: Object.entries(DERIVED).filter(([, v]) => v.domain === d.id).map(([k]) => k),
   };
 }
 
 export default async function domainRoutes(app: FastifyInstance) {
   // ── catalog ──────────────────────────────────────────────────────────
-  app.get('/api/v1/catalog', async (req) => {
+  app.get('/api/catalog', async (req) => {
     const p = await requireOwner(req, ['records:read', 'owner:read']);
     const domains = await listDomains();
     const visible = p.key.scopes.includes('admin:*') || p.key.scopes.includes('records:read')
@@ -79,7 +79,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     return { domains: visible.map((d) => catalogEntry(d, sums[d.id])) };
   });
 
-  app.post('/api/v1/catalog', async (req, reply) => {
+  app.post('/api/catalog', async (req, reply) => {
     const p = await requireSession(req);
     const def = checkCustomDomain((req.body || {}) as Partial<DomainDef>);
     if (await getDomain(def.id)) throw new HttpError(409, 'exists', `You already have a category called ${def.label}`);
@@ -89,7 +89,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     return catalogEntry(def, (await summarize([def]))[def.id]);
   });
 
-  app.delete('/api/v1/catalog/:id', async (req) => {
+  app.delete('/api/catalog/:id', async (req) => {
     const p = await requireSession(req);
     const d = await domainOr404((req.params as { id: string }).id);
     if (d.builtIn) throw bad('built_in', 'Built-in categories can’t be removed');
@@ -104,7 +104,7 @@ export default async function domainRoutes(app: FastifyInstance) {
   });
 
   // ── attention: documents and registrations expiring soon (or already) ─
-  app.get('/api/v1/attention', async (req) => {
+  app.get('/api/attention', async (req) => {
     await requireOwner(req, ['records:read']);
     const days = Math.min(730, Math.max(1, Number((req.query as { days?: string }).days) || 180));
     const today = new Date().toISOString().slice(0, 10);
@@ -135,7 +135,7 @@ export default async function domainRoutes(app: FastifyInstance) {
   });
 
   // ── timeline: every dated record, across domains ─────────────────────
-  app.get('/api/v1/timeline', async (req) => {
+  app.get('/api/timeline', async (req) => {
     await requireOwner(req, ['records:read']);
     const q = req.query as { from?: string; to?: string; domains?: string };
     const wanted = q.domains ? new Set(q.domains.split(',')) : null;
@@ -152,10 +152,8 @@ export default async function domainRoutes(app: FastifyInstance) {
     return { items };
   });
 
-  // ── per-domain CRUD: /api/v1/data/{domain} ────────────────────────────
+  // ── per-domain CRUD: /api/data/{domain} ────────────────────────────
   // Records have their own prefix, so no fixed route can ever block a domain name.
-  // The older /api/v1/{domain} paths are aliases until beta ships; nothing new should use them.
-  // Registered last: every fixed /api/v1 route above or elsewhere wins over the alias parameters.
   const ctxFor = async (req: FastifyRequest, write: boolean) => {
     const { domain, id } = req.params as { domain: string; id?: string };
     const d = await domainOr404(domain);
@@ -164,90 +162,89 @@ export default async function domainRoutes(app: FastifyInstance) {
     return { d, p, id, by };
   };
 
-  for (const base of ['/api/v1/data/:domain', '/api/v1/:domain']) {
-    app.get(base, async (req) => {
-      const { d } = await ctxFor(req, false);
-      const q = req.query as { current?: string; from?: string; to?: string };
-      let recs = sortRecords(d, await recordsOf(d.id));
-      if (q.current === 'true') recs = recs.filter((r) => isCurrent(d, r));
-      if (q.from || q.to) recs = recs.filter((r) => inRange(r, q.from, q.to));
-      const docs = await documentsByRecord(d.id);
-      const label = await actorLabels();
-      return { domain: d.id, items: recs.map((r) => { const out = recordOut(d, r); return { ...out, updatedByLabel: label(out.updatedBy), documents: docs.get(r._id) ?? [] }; }) };
-    });
+  const base = '/api/data/:domain';
+  app.get(base, async (req) => {
+    const { d } = await ctxFor(req, false);
+    const q = req.query as { current?: string; from?: string; to?: string };
+    let recs = sortRecords(d, await recordsOf(d.id));
+    if (q.current === 'true') recs = recs.filter((r) => isCurrent(d, r));
+    if (q.from || q.to) recs = recs.filter((r) => inRange(r, q.from, q.to));
+    const docs = await documentsByRecord(d.id);
+    const label = await actorLabels();
+    return { domain: d.id, items: recs.map((r) => { const out = recordOut(d, r); return { ...out, updatedByLabel: label(out.updatedBy), documents: docs.get(r._id) ?? [] }; }) };
+  });
 
-    app.post(base, async (req, reply) => {
-      const { d, p, by } = await ctxFor(req, true);
-      const rec = await buildRecord(d, (req.body || {}) as RecordInput, null, by);
-      await ctx.store.insert('records', rec);
-      await recordVersion(rec, 'create', by);
-      await demoteOtherPrimaries(rec);
-      await syncDerived(d.id);
-      const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
-      nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
-      await audit({ actor: ownerActor(p.key._id), action: 'record.create', resource: `${d.id}/${rec._id}`, text: `${p.isSession ? 'You' : 'An app'} added ${out.title} to ${d.label}`, tone: 'owner' });
-      reply.code(201);
-      return out;
-    });
+  app.post(base, async (req, reply) => {
+    const { d, p, by } = await ctxFor(req, true);
+    const rec = await buildRecord(d, (req.body || {}) as RecordInput, null, by);
+    await ctx.store.insert('records', rec);
+    await recordVersion(rec, 'create', by);
+    await demoteOtherPrimaries(rec);
+    await syncDerived(d.id);
+    const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
+    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+    await audit({ actor: ownerActor(p.key._id), action: 'record.create', resource: `${d.id}/${rec._id}`, text: `${p.isSession ? 'You' : 'An app'} added ${out.title} to ${d.label}`, tone: 'owner' });
+    reply.code(201);
+    return out;
+  });
 
-    app.get(`${base}/:id`, async (req) => {
-      const { d, id } = await ctxFor(req, false);
-      const r = await recordOr404(d, id!);
-      const out = recordOut(d, r);
-      return { ...out, updatedByLabel: (await actorLabels())(out.updatedBy), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
-    });
+  app.get(`${base}/:id`, async (req) => {
+    const { d, id } = await ctxFor(req, false);
+    const r = await recordOr404(d, id!);
+    const out = recordOut(d, r);
+    return { ...out, updatedByLabel: (await actorLabels())(out.updatedBy), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
+  });
 
-    app.patch(`${base}/:id`, async (req) => {
-      const { d, p, id, by } = await ctxFor(req, true);
-      const existing = await recordOr404(d, id!);
-      const rec = await buildRecord(d, (req.body || {}) as RecordInput, existing, by);
-      const { _id, ...rest } = rec;
-      // Replace data wholesale so removed parts really go.
-      await ctx.store.update('records', _id, { ...rest });
-      await recordVersion(rec, 'update', by);
-      await demoteOtherPrimaries(rec);
-      await syncDerived(d.id);
-      const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
-      nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
-      await audit({ actor: ownerActor(p.key._id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${p.isSession ? 'You' : 'An app'} updated ${out.title} in ${d.label}`, tone: 'owner' });
-      return out;
-    });
+  app.patch(`${base}/:id`, async (req) => {
+    const { d, p, id, by } = await ctxFor(req, true);
+    const existing = await recordOr404(d, id!);
+    const rec = await buildRecord(d, (req.body || {}) as RecordInput, existing, by);
+    const { _id, ...rest } = rec;
+    // Replace data wholesale so removed parts really go.
+    await ctx.store.update('records', _id, { ...rest });
+    await recordVersion(rec, 'update', by);
+    await demoteOtherPrimaries(rec);
+    await syncDerived(d.id);
+    const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
+    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+    await audit({ actor: ownerActor(p.key._id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${p.isSession ? 'You' : 'An app'} updated ${out.title} in ${d.label}`, tone: 'owner' });
+    return out;
+  });
 
-    app.delete(`${base}/:id`, async (req) => {
-      const { d, p, id, by } = await ctxFor(req, true);
-      const r = await recordOr404(d, id!);
-      const title = recordOut(d, r).title;
-      await recordVersion(r, 'delete', by);
-      await ctx.store.remove('records', r._id);
-      const docsDeleted = await recordRemoved(r._id);
-      await syncDerived(d.id);
-      nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
-      await audit({ actor: ownerActor(p.key._id), action: 'record.delete', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} removed ${title} from ${d.label}`, tone: 'owner' });
-      return { deleted: true, documentsDeleted: docsDeleted, restorableForDays: KEEP_DELETED_DAYS };
-    });
+  app.delete(`${base}/:id`, async (req) => {
+    const { d, p, id, by } = await ctxFor(req, true);
+    const r = await recordOr404(d, id!);
+    const title = recordOut(d, r).title;
+    await recordVersion(r, 'delete', by);
+    await ctx.store.remove('records', r._id);
+    const docsDeleted = await recordRemoved(r._id);
+    await syncDerived(d.id);
+    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+    await audit({ actor: ownerActor(p.key._id), action: 'record.delete', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} removed ${title} from ${d.label}`, tone: 'owner' });
+    return { deleted: true, documentsDeleted: docsDeleted, restorableForDays: KEEP_DELETED_DAYS };
+  });
 
-    app.post(`${base}/:id/reveal`, async (req) => {
-      const { d, p, id } = await ctxFor(req, false);
-      const r = await recordOr404(d, id!);
-      const out = recordOut(d, r, { reveal: true });
-      await audit({ actor: ownerActor(p.key._id), action: 'record.reveal', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} revealed ${recordOut(d, r).title} (${d.label})`, tone: 'owner', ip: req.ip });
-      return out;
-    });
-  }
+  app.post(`${base}/:id/reveal`, async (req) => {
+    const { d, p, id } = await ctxFor(req, false);
+    const r = await recordOr404(d, id!);
+    const out = recordOut(d, r, { reveal: true });
+    await audit({ actor: ownerActor(p.key._id), action: 'record.reveal', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} revealed ${recordOut(d, r).title} (${d.label})`, tone: 'owner', ip: req.ip });
+    return out;
+  });
 
-  // ── history: /api/v1/data/{domain}/{id}/history ───────────────────────
+  // ── history: /api/data/{domain}/{id}/history ───────────────────────
   // Owner-facing only (same scopes as the record); contacts and peers see current values, never history.
   const versionOut = (d: DomainDef, v: VersionDoc, label: (a: Actor) => string) => ({
     version: v._id, action: v.action, at: v.at, by: v.by, byLabel: label(v.by), record: recordOut(d, versionRecord(v)),
   });
 
-  app.get('/api/v1/data/:domain/deleted', async (req) => {
+  app.get('/api/data/:domain/deleted', async (req) => {
     const { d } = await ctxFor(req, false);
     const label = await actorLabels();
     return { domain: d.id, keepDays: KEEP_DELETED_DAYS, items: (await deletedRecords(d.id)).map((v) => versionOut(d, v, label)) };
   });
 
-  app.get('/api/v1/data/:domain/:id/history', async (req) => {
+  app.get('/api/data/:domain/:id/history', async (req) => {
     const { d, id } = await ctxFor(req, false);
     const versions = (await versionsOf(id!)).filter((v) => v.domain === d.id);
     if (!versions.length && !(await ctx.store.get('records', id!))) throw notFound('record_not_found');
@@ -256,7 +253,7 @@ export default async function domainRoutes(app: FastifyInstance) {
   });
 
   /** Make an earlier version current again, as a new change (or bring a deleted record back). Nothing is rewritten. */
-  app.post('/api/v1/data/:domain/:id/history/:version/restore', async (req) => {
+  app.post('/api/data/:domain/:id/history/:version/restore', async (req) => {
     const { d, p, id, by } = await ctxFor(req, true);
     const { version } = req.params as { version: string };
     const v = await ctx.store.get<VersionDoc>('recordVersions', version);

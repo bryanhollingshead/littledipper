@@ -22,15 +22,15 @@ export default function Contacts() {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<'all' | 'node' | 'person'>('all');
   const [modal, setModal] = useState<null | 'person' | 'invite'>(null);
-  const { data, error, reload } = useAsync(() => get<{ items: Contact[] }>('/api/v1/contacts'), []);
-  const { data: reqs, reload: reloadReqs } = useAsync(() => get<{ items: Req[] }>('/api/v1/federation/requests?status=pending&direction=in'), []);
+  const { data, error, reload } = useAsync(() => get<{ items: Contact[] }>('/api/contacts'), []);
+  const { data: reqs, reload: reloadReqs } = useAsync(() => get<{ items: Req[] }>('/api/federation/requests?status=pending&direction=in'), []);
 
   if (error) return <ErrorNote error={error} />;
   const term = q.toLowerCase();
   const rows = (data?.items || []).filter((c) => (filter === 'all' || c.kind === filter) && (!term || c.displayName.toLowerCase().includes(term) || (c.org || '').toLowerCase().includes(term)));
 
   const decline = async (r: Req) => {
-    if (await run(() => post(`/api/v1/federation/requests/${r._id}/decline`), 'Request declined')) {
+    if (await run(() => post(`/api/federation/requests/${r._id}/decline`), 'Request declined')) {
       reload(); reloadReqs(); refresh();
     }
   };

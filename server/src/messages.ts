@@ -41,7 +41,7 @@ export type MessageDoc = Doc & {
   readAt: string | null;
 };
 
-/** What travels inside the signed envelope to POST /peer/v1/messages. */
+/** What travels inside the signed envelope to POST /peer/messages. */
 export type WireMessage = {
   type: 'message'; id: string; to: string; conversation: string | null; kind: string; body: unknown;
   inReplyTo: string | null; attachments: unknown[]; createdAt: string;
@@ -126,7 +126,7 @@ export async function deliver(id: string) {
         type: 'message', id: m._id, to: link.peerNodeId, conversation: null, kind: m.kind, body: unseal(m),
         inReplyTo: m.inReplyTo, attachments: [], createdAt: m.createdAt,
       };
-      await sendSigned(link.peerUrl, '/peer/v1/messages', wire);
+      await sendSigned(link.peerUrl, '/peer/messages', wire);
       const t = now();
       await ctx.store.update('messages', id, { status: 'delivered', sentAt: t, deliveredAt: t, attempts: m.attempts + 1, nextAttemptAt: null, lastError: null });
     } catch (e) {

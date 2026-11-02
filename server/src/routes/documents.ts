@@ -1,7 +1,7 @@
 /**
  * Documents and their pages, assistant suggestions, expiring share links, and the documents export.
  *
- *   POST /api/v1/documents?name=license.jpg&link=ids:rec_…    body: the bytes, type in Content-Type
+ *   POST /api/documents?name=license.jpg&link=ids:rec_…    body: the bytes, type in Content-Type
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { audit, ownerActor } from '../audit.js';
@@ -70,12 +70,12 @@ export default async function documentRoutes(app: FastifyInstance) {
   };
 
   // ── library ──────────────────────────────────────────────────────────
-  app.get('/api/v1/documents/kinds', async (req) => {
+  app.get('/api/documents/kinds', async (req) => {
     await requireOwner(req, ['documents:read', 'records:read']);
     return documentKinds();
   });
 
-  app.get('/api/v1/documents', async (req) => {
+  app.get('/api/documents', async (req) => {
     const p = await requireOwner(req, ['documents:read', 'records:read', ...(await listDomains()).map((d) => `${d.id}:read`)]);
     const q = req.query as { status?: string; kind?: string; domain?: string; recordId?: string; q?: string };
     let docs = (await ctx.store.find<DocumentDoc>('documents', {}, { sort: { createdAt: -1 } })).filter((d) => canSee(p, d));
@@ -90,7 +90,7 @@ export default async function documentRoutes(app: FastifyInstance) {
   });
 
   /** One upload, one new document. With ?link=domain:recordId it's filed on that entry. */
-  app.post('/api/v1/documents', async (req, reply) => {
+  app.post('/api/documents', async (req, reply) => {
     const q = req.query as { name?: string; title?: string; kind?: string; status?: string; date?: string; link?: string };
     const links = parseLink(q.link);
     const p = await requireOwner(req, docScopes({ links }, true));
@@ -103,9 +103,9 @@ export default async function documentRoutes(app: FastifyInstance) {
     return documentOut(doc);
   });
 
-  app.get('/api/v1/documents/:id', async (req) => documentOut((await docFor(req, false)).doc));
+  app.get('/api/documents/:id', async (req) => documentOut((await docFor(req, false)).doc));
 
-  app.patch('/api/v1/documents/:id', async (req) => {
+  app.patch('/api/documents/:id', async (req) => {
     const { doc, p } = await docFor(req, true);
     const b = (req.body || {}) as Partial<{ title: string; kind: string; status: string; date: string | null; notes: string; text: string; links: unknown }>;
     const set: Partial<DocumentDoc> = { updatedAt: new Date().toISOString() };
@@ -125,7 +125,7 @@ export default async function documentRoutes(app: FastifyInstance) {
     return documentOut({ ...doc, ...set });
   });
 
-  app.delete('/api/v1/documents/:id', async (req) => {
+  app.delete('/api/documents/:id', async (req) => {
     const { doc, p } = await docFor(req, true);
     await deleteDocument(doc);
     await audit({ actor: ownerActor(p.key._id), action: 'document.delete', resource: `documents/${doc._id}`, text: `${who(p)} deleted the document ${doc.title}`, tone: 'owner' });
@@ -133,7 +133,7 @@ export default async function documentRoutes(app: FastifyInstance) {
   });
 
   // ── pages ────────────────────────────────────────────────────────────
-  app.post('/api/v1/documents/:id/pages', async (req, reply) => {
+  app.post('/api/documents/:id/pages', async (req, reply) => {
     const { doc, p } = await docFor(req, true);
     const { type, data } = bodyBytes(req);
     const page = await saveFile(String((req.query as { name?: string }).name || 'page'), type, data, sourceOf(p), doc._id);
@@ -141,12 +141,12 @@ export default async function documentRoutes(app: FastifyInstance) {
     return documentOut(await addPage(doc, page));
   });
 
-  app.delete('/api/v1/documents/:id/pages/:fileId', async (req) => {
+  app.delete('/api/documents/:id/pages/:fileId', async (req) => {
     const { doc } = await docFor(req, true);
     return documentOut(await removePage(doc, (req.params as { fileId: string }).fileId));
   });
 
-  app.get('/api/v1/files/:id', async (req, reply) => {
+  app.get('/api/files/:id', async (req, reply) => {
     const f = await ctx.store.get<FileDoc>('files', (req.params as { id: string }).id);
     const doc = f?.documentId ? await ctx.store.get<DocumentDoc>('documents', f.documentId) : null;
     if (!f || !doc) throw notFound('file_not_found');
@@ -157,7 +157,7 @@ export default async function documentRoutes(app: FastifyInstance) {
   });
 
   // ── suggestions: an assistant proposes, the owner decides ─────────────
-  app.post('/api/v1/documents/:id/suggestions', async (req, reply) => {
+  app.post('/api/documents/:id/suggestions', async (req, reply) => {
     const { doc, p } = await docFor(req, true);
     const s = await checkSuggestion((req.body || {}) as Record<string, unknown>, sourceOf(p));
     const d = (await getDomain(s.domain))!;
@@ -169,7 +169,7 @@ export default async function documentRoutes(app: FastifyInstance) {
   });
 
   /** Owner only: create or update the record (optionally with edits), link the document, file it. */
-  app.post('/api/v1/documents/:id/suggestions/:sid/accept', async (req) => {
+  app.post('/api/documents/:id/suggestions/:sid/accept', async (req) => {
     const p = await requireSession(req);
     const doc = await documentOr404((req.params as { id: string }).id);
     const s = doc.suggestions.find((x) => x.id === (req.params as { sid: string }).sid);
@@ -192,21 +192,21 @@ export default async function documentRoutes(app: FastifyInstance) {
     return { document: await documentOut(linked), record: recordOut(d, rec) };
   });
 
-  app.delete('/api/v1/documents/:id/suggestions/:sid', async (req) => {
+  app.delete('/api/documents/:id/suggestions/:sid', async (req) => {
     const { doc } = await docFor(req, true);
     return documentOut(await dropSuggestion(doc, (req.params as { sid: string }).sid));
   });
 
   // ── share links for people without a Little Dipper ────────────────────
   // Owner's browser only: a public link is an outward-facing act.
-  app.get('/api/v1/documents/:id/shares', async (req) => {
+  app.get('/api/documents/:id/shares', async (req) => {
     await requireSession(req);
     const doc = await documentOr404((req.params as { id: string }).id);
     const shares = await ctx.store.find<ShareDoc>('shares', { documentId: doc._id }, { sort: { createdAt: -1 } });
     return { items: shares.map(({ tokenHash, ...s }) => ({ id: s._id, ...s, active: !s.revokedAt && s.expiresAt > new Date().toISOString() })) };
   });
 
-  app.post('/api/v1/documents/:id/shares', async (req, reply) => {
+  app.post('/api/documents/:id/shares', async (req, reply) => {
     const p = await requireSession(req);
     const doc = await documentOr404((req.params as { id: string }).id);
     const hours = Number((req.body as { hours?: number } | null)?.hours ?? 24 * 7);
@@ -219,7 +219,7 @@ export default async function documentRoutes(app: FastifyInstance) {
     return { id: share._id, url: `${canonicalUrl(await getNode())}/s/${share._id}.${secret}`, expiresAt: share.expiresAt };
   });
 
-  app.delete('/api/v1/documents/:id/shares/:shareId', async (req) => {
+  app.delete('/api/documents/:id/shares/:shareId', async (req) => {
     const p = await requireSession(req);
     const s = await ctx.store.get<ShareDoc>('shares', (req.params as { shareId: string }).shareId);
     if (!s || s.documentId !== (req.params as { id: string }).id) throw notFound('share_not_found');
@@ -238,7 +238,7 @@ export default async function documentRoutes(app: FastifyInstance) {
     return { s: s!, doc };
   };
 
-  app.get('/public/v1/shared/:token', async (req, reply) => {
+  app.get('/public/shared/:token', async (req, reply) => {
     const { s, doc } = await openShare(req);
     await ctx.store.update('shares', s._id, { views: s.views + 1, lastViewedAt: new Date().toISOString() });
     await audit({ actor: { type: 'public', id: s._id }, action: 'document.view', resource: `documents/${doc._id}`, text: `Someone opened your share link for ${doc.title}`, tone: 'system', ip: req.ip });
@@ -247,7 +247,7 @@ export default async function documentRoutes(app: FastifyInstance) {
     return { title: doc.title, kind: doc.kind, date: doc.date, pages: doc.pages, expiresAt: s.expiresAt, sharedBy: owner?.displayName ?? null };
   });
 
-  app.get('/public/v1/shared/:token/files/:fileId', async (req, reply) => {
+  app.get('/public/shared/:token/files/:fileId', async (req, reply) => {
     const { doc } = await openShare(req);
     const fileId = (req.params as { fileId: string }).fileId;
     const f = doc.pages.some((x) => x.id === fileId) ? await ctx.store.get<FileDoc>('files', fileId) : null;
@@ -258,7 +258,7 @@ export default async function documentRoutes(app: FastifyInstance) {
   });
 
   // ── public profile: photo, résumé pages, and what sections can show ────
-  app.put('/api/v1/public-profile/avatar', async (req) => {
+  app.put('/api/public-profile/avatar', async (req) => {
     const p = await requireOwner(req, 'public:write');
     const { type, data } = bodyBytes(req);
     if (!/^image\/(jpeg|png|webp|gif)$/.test(type)) throw bad('unsupported_type', 'Use a JPEG, PNG or WebP photo');
@@ -267,16 +267,16 @@ export default async function documentRoutes(app: FastifyInstance) {
     await createDocument({ title: 'Profile photo', kind: 'photo', status: 'filed', links: [], page, from: sourceOf(p) });
     await ctx.store.update('publicProfile', 'public', { avatarFileId: page._id });
     await audit({ actor: ownerActor(p.key._id), action: 'public.update', resource: 'publicProfile', text: 'You changed your public profile photo', tone: 'owner' });
-    return { avatarUrl: `/public/v1/profile/files/${page._id}` };
+    return { avatarUrl: `/public/profile/files/${page._id}` };
   });
 
-  app.delete('/api/v1/public-profile/avatar', async (req) => {
+  app.delete('/api/public-profile/avatar', async (req) => {
     await requireOwner(req, 'public:write');
     await ctx.store.update('publicProfile', 'public', { avatarFileId: null });
     return { avatarUrl: null };
   });
 
-  app.get('/public/v1/profile/files/:fileId', async (req, reply) => {
+  app.get('/public/profile/files/:fileId', async (req, reply) => {
     const pp = await ctx.store.get<PublicProfileDoc>('publicProfile', 'public');
     const fileId = (req.params as { fileId: string }).fileId;
     const f = pp && (await publicFileIds(pp)).has(fileId) ? await ctx.store.get<FileDoc>('files', fileId) : null;
@@ -285,7 +285,7 @@ export default async function documentRoutes(app: FastifyInstance) {
     return reply.send(await sendFile(reply, f, (req.query as { download?: string }).download === '1'));
   });
 
-  app.get('/api/v1/public-profile/options', async (req) => {
+  app.get('/api/public-profile/options', async (req) => {
     await requireOwner(req, 'owner:read');
     const domains = (await listDomains()).filter((d) => d.publicable);
     return {
@@ -298,7 +298,7 @@ export default async function documentRoutes(app: FastifyInstance) {
   });
 
   // ── export: every document's pages, decrypted, as a .tar ──────────────
-  app.get('/api/v1/export/documents', async (req, reply) => {
+  app.get('/api/export/documents', async (req, reply) => {
     const p = await requireOwner(req, 'export');
     const docs = await ctx.store.find<DocumentDoc>('documents', {}, { sort: { createdAt: 1 } });
     const entries: { name: string; data: Buffer; mtime: Date }[] = [];

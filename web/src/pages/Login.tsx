@@ -15,9 +15,9 @@ export default function Login() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    get('/api/v1/node/status').then((s) => (s.claimed ? setStatus(s) : nav('/', { replace: true })));
+    get('/api/node/status').then((s) => (s.claimed ? setStatus(s) : nav('/', { replace: true })));
     get('/.well-known/little-dipper').then((d) => d.displayName && setBrand(d.displayName)).catch(() => {});
-    get('/api/v1/owner').then(() => nav('/admin', { replace: true })).catch(() => {});
+    get('/api/owner').then(() => nav('/admin', { replace: true })).catch(() => {});
   }, [nav]);
 
   const done = () => nav('/admin', { replace: true });
@@ -26,9 +26,9 @@ export default function Login() {
     setPending(true);
     setError('');
     try {
-      const { challengeId, options } = await post('/api/v1/auth/passkeys/options');
+      const { challengeId, options } = await post('/api/auth/passkeys/options');
       const response = await startAuthentication({ optionsJSON: options });
-      await post('/api/v1/auth/passkeys/verify', { challengeId, response });
+      await post('/api/auth/passkeys/verify', { challengeId, response });
       done();
     } catch (e) {
       if ((e as Error).name !== 'NotAllowedError') setError((e as Error).message);
@@ -40,8 +40,8 @@ export default function Login() {
   const password = async () => {
     setError('');
     try {
-      await post('/api/v1/auth/password', { password: f.pw });
-      await post('/api/v1/auth/totp/verify', { code: f.totp });
+      await post('/api/auth/password', { password: f.pw });
+      await post('/api/auth/totp/verify', { code: f.totp });
       done();
     } catch (e) {
       setError((e as Error).message);
@@ -51,7 +51,7 @@ export default function Login() {
   const recovery = async () => {
     setError('');
     try {
-      const r = await post('/api/v1/auth/recovery', { code: f.code });
+      const r = await post('/api/auth/recovery', { code: f.code });
       toast(`Signed in. ${r.codesLeft} recovery code${r.codesLeft === 1 ? '' : 's'} left.`);
       done();
     } catch (e) {

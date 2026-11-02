@@ -9,7 +9,7 @@ const SENS_OPTS: [Sensitivity, string][] = [['standard', 'Standard'], ['sensitiv
 type FieldsResp = { items: Field[]; basicProfileContacts: number };
 
 export default function MyData() {
-  const { data, error, reload } = useAsync(() => get<FieldsResp>('/api/v1/owner/fields'), []);
+  const { data, error, reload } = useAsync(() => get<FieldsResp>('/api/owner/fields'), []);
   const { run, busy } = useAction();
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<(Field & { newValue: string; newSens: Sensitivity }) | null>(null);
@@ -25,7 +25,7 @@ export default function MyData() {
       setRevealed(rest);
       return;
     }
-    const r = await run(() => post<{ value: string }>(`/api/v1/owner/fields/${f.key}/reveal`));
+    const r = await run(() => post<{ value: string }>(`/api/owner/fields/${f.key}/reveal`));
     if (r) setRevealed({ ...revealed, [f.key]: r.value });
   };
 
@@ -34,7 +34,7 @@ export default function MyData() {
     const body: Record<string, unknown> = { sensitivity: editing.newSens };
     // Secret values start blank in the dialog; blank means "keep".
     if (!editing.derivedFrom && !(editing.sensitivity === 'secret' && editing.newValue === '')) body.value = editing.newValue;
-    const r = await run(() => put(`/api/v1/owner/fields/${editing.key}`, body), `${editing.label} saved`);
+    const r = await run(() => put(`/api/owner/fields/${editing.key}`, body), `${editing.label} saved`);
     if (r) {
       setEditing(null);
       setRevealed({});
@@ -98,7 +98,7 @@ export default function MyData() {
         <Dialog title={`Edit ${editing.label}`} onClose={() => setEditing(null)} actions={<>
           {!editing.derivedFrom && <button className="btn btn-ghost" style={{ marginRight: 'auto' }} onClick={() => setConfirm({
             title: `Remove ${editing.label}?`, body: 'The value is deleted from your Little Dipper and anyone you shared it with stops seeing it.', cta: 'Remove',
-            onConfirm: async () => { if (await run(() => del(`/api/v1/owner/fields/${editing.key}`), `${editing.label} removed`)) { setConfirm(null); setEditing(null); reload(); } },
+            onConfirm: async () => { if (await run(() => del(`/api/owner/fields/${editing.key}`), `${editing.label} removed`)) { setConfirm(null); setEditing(null); reload(); } },
           })}>Remove</button>}
           <button className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
           <button className="btn btn-primary" disabled={busy} onClick={saveEdit}>Save</button>
@@ -116,7 +116,7 @@ export default function MyData() {
       {adding && (
         <Dialog title="Add a field" onClose={() => setAdding(null)} actions={<>
           <button className="btn btn-secondary" onClick={() => setAdding(null)}>Cancel</button>
-          <button className="btn btn-primary" disabled={busy || !adding.label.trim()} onClick={async () => { if (await run(() => post('/api/v1/owner/fields', adding), `${adding.label} added`)) { setAdding(null); reload(); } }}>Add field</button>
+          <button className="btn btn-primary" disabled={busy || !adding.label.trim()} onClick={async () => { if (await run(() => post('/api/owner/fields', adding), `${adding.label} added`)) { setAdding(null); reload(); } }}>Add field</button>
         </>}>
           <div className="field"><label htmlFor="al">Name</label><input id="al" className="input" placeholder="Passport number" value={adding.label} onChange={(e) => setAdding({ ...adding, label: e.target.value })} /></div>
           <div className="field"><label htmlFor="av">Value</label><input id="av" className="input" value={adding.value} onChange={(e) => setAdding({ ...adding, value: e.target.value })} /></div>

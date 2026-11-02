@@ -20,10 +20,10 @@ export default function Home() {
   const { run } = useAction();
   const device = useDeviceBackup(refresh);
   const [modal, setModal] = useState<null | 'add' | 'invite'>(null);
-  const { data: reqs } = useAsync(() => get('/api/v1/federation/requests?status=pending&direction=in'), []);
-  const { data: audit, reload } = useAsync(() => get<{ items: AuditEvent[] }>('/api/v1/audit?limit=6'), []);
+  const { data: reqs } = useAsync(() => get('/api/federation/requests?status=pending&direction=in'), []);
+  const { data: audit, reload } = useAsync(() => get<{ items: AuditEvent[] }>('/api/audit?limit=6'), []);
   const { data: catalog } = useAsync(fetchCatalog, []);
-  const { data: attention } = useAsync(() => get<{ items: { domain: string; id: string; title: string; part: string; kind?: 'expiry' | 'deadline'; date: string; expired: boolean }[] }>('/api/v1/attention?days=90'), []);
+  const { data: attention } = useAsync(() => get<{ items: { domain: string; id: string; title: string; part: string; kind?: 'expiry' | 'deadline'; date: string; expired: boolean }[] }>('/api/attention?days=90'), []);
 
   const inbox = [
     ...(reqs?.items || []).filter((r: { quiet: boolean }) => !r.quiet).map((r: { _id: string; contactId: string; fromNode: string; peerName: string }) => ({
@@ -42,7 +42,7 @@ export default function Home() {
   const started = catalog?.filter((d) => d.count > 0).length ?? 0;
   const entries = catalog?.reduce((n, d) => n + d.count, 0) ?? 0;
 
-  const backup = () => run(() => post('/api/v1/node/backups'), 'Backup complete').then(() => { refresh(); reload(); });
+  const backup = () => run(() => post('/api/node/backups'), 'Backup complete').then(() => { refresh(); reload(); });
 
   return (
     <div data-screen-label="Dashboard" style={{ maxWidth: 1040 }}>
@@ -132,7 +132,7 @@ export default function Home() {
 /** The next seven days from the calendar, at a glance. */
 function ThisWeek() {
   const today = ymd(new Date());
-  const { data } = useAsync(() => get<{ items: CalItem[] }>(`/api/v1/calendar?from=${today}&to=${addDays(today, 6)}`), [today]);
+  const { data } = useAsync(() => get<{ items: CalItem[] }>(`/api/calendar?from=${today}&to=${addDays(today, 6)}`), [today]);
   const next = (data?.items ?? []).filter((i) => daysOf(i)[1] >= today).slice(0, 4);
   const dayLabel = (d: string) => (d <= today ? 'Today' : d === addDays(today, 1) ? 'Tomorrow' : new Date(`${d}T12:00`).toLocaleDateString(undefined, { weekday: 'short' }));
   return (

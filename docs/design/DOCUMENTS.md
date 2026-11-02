@@ -19,23 +19,23 @@
 - **Links** to entries in My data, any number of them. The same document appears on each linked entry and in the library: nothing is stored twice.
 - Categories that take documents name a default kind (`DomainDef.documents`): IDs → ID document, Insurance → insurance card, Receipts → receipt, Residences → lease, and so on. Their editor gets a Documents section.
 - **Deleting an entry** deletes documents linked only to it (a receipt's photo) and unlinks documents linked elsewhere.
-- Pages are **encrypted** with the master key and kept apart from the JSON documents. **Backups** copy each page once into `backups/blobs` and restore brings back pages deleted since. **Export:** `GET /api/v1/export/documents` gives a `.tar` of every page with a manifest.
+- Pages are **encrypted** with the master key and kept apart from the JSON documents. **Backups** copy each page once into `backups/blobs` and restore brings back pages deleted since. **Export:** `GET /api/export/documents` gives a `.tar` of every page with a manifest.
 
 ## Ways in
 
 | From | How | Status |
 |---|---|---|
 | The owner | Upload or drag in on the Documents page (→ inbox), or add from an entry in My data (→ filed on it) | Built |
-| Apps and assistants | `POST /api/v1/documents` with a key: `documents:write` for the library, or a category's write scope to file on its entries (a receipts key can file receipt photos) | Built |
+| Apps and assistants | `POST /api/documents` with a key: `documents:write` for the library, or a category's write scope to file on its entries (a receipts key can file receipt photos) | Built |
 | Connected Little Dippers | A message with an attachment (messages already carry an `attachments` field) | Later |
 | Organizations | The service API, like merchant receipts | Later |
 | Email forwarding | See [MESSAGING-AND-EMAIL.md](MESSAGING-AND-EMAIL.md) | Later |
 
 ## Assistants
 
-1. Find new documents: `GET /api/v1/documents?status=inbox` (a notification feed later, so they don't poll).
-2. Save what they read: `PATCH /api/v1/documents/{id}` with `text`. The library searches it.
-3. Propose entries: `POST /api/v1/documents/{id}/suggestions` with `{ domain, recordId?, data, note }`. Values are validated immediately.
+1. Find new documents: `GET /api/documents?status=inbox` (a notification feed later, so they don't poll).
+2. Save what they read: `PATCH /api/documents/{id}` with `text`. The library searches it.
+3. Propose entries: `POST /api/documents/{id}/suggestions` with `{ domain, recordId?, data, note }`. Values are validated immediately.
 4. **Only the owner accepts** (`.../accept`, browser session only), optionally after editing. The entry records the assistant's key as its source; the document is linked and filed.
 
 This keeps the rule from question 7: AIs write through drafts the owner approves.

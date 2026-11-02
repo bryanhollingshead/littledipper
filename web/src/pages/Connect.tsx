@@ -7,7 +7,7 @@ export default function Connect() {
   const [params] = useSearchParams();
   const token = params.get('invite') || '';
   const toast = useToast();
-  const { data } = useAsync(() => get<{ valid: boolean; displayName: string | null; address: string; expiresAt: string | null }>(`/public/v1/invites/${encodeURIComponent(token)}`), [token]);
+  const { data } = useAsync(() => get<{ valid: boolean; displayName: string | null; address: string; expiresAt: string | null }>(`/public/invites/${encodeURIComponent(token)}`), [token]);
   if (!data) return <div style={{ padding: 48 }}><Loading /></div>;
   const link = window.location.href;
   return (

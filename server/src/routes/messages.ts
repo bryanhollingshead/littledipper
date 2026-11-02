@@ -1,4 +1,4 @@
-/** Owner inbox: conversations by contact, sending, read state. Peers deliver to POST /peer/v1/messages (routes/peer.ts). */
+/** Owner inbox: conversations by contact, sending, read state. Peers deliver to POST /peer/messages (routes/peer.ts). */
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { notFound, requireOwner } from '../auth.js';
@@ -18,13 +18,13 @@ const preview = (m: MessageDoc) => {
 };
 
 export default async function messageRoutes(app: FastifyInstance) {
-  app.get('/api/v1/messages/unread', async (req) => {
+  app.get('/api/messages/unread', async (req) => {
     await requireOwner(req, 'messages:read');
     return { count: await ctx.store.count('messages', { direction: 'in', status: 'received' }) };
   });
 
   /** One row per contact you've exchanged messages with, newest first. */
-  app.get('/api/v1/messages/conversations', async (req) => {
+  app.get('/api/messages/conversations', async (req) => {
     await requireOwner(req, 'messages:read');
     const all = await ctx.store.find<MessageDoc>('messages', {}, { sort: { createdAt: -1 } });
     const byContact = new Map<string, MessageDoc[]>();
@@ -45,7 +45,7 @@ export default async function messageRoutes(app: FastifyInstance) {
   });
 
   /** Messages with one contact, oldest first. ?before=<iso>&limit=<n> pages back through history. */
-  app.get('/api/v1/messages/conversations/:contactId', async (req) => {
+  app.get('/api/messages/conversations/:contactId', async (req) => {
     await requireOwner(req, 'messages:read');
     const c = await getContact((req.params as { contactId: string }).contactId);
     const q = req.query as { before?: string; limit?: string };
@@ -62,7 +62,7 @@ export default async function messageRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/api/v1/messages/conversations/:contactId', async (req, reply) => {
+  app.post('/api/messages/conversations/:contactId', async (req, reply) => {
     await requireOwner(req, 'messages:write');
     const c = await getContact((req.params as { contactId: string }).contactId);
     const b = (req.body || {}) as { kind?: string; body?: unknown; inReplyTo?: string | null };
@@ -71,7 +71,7 @@ export default async function messageRoutes(app: FastifyInstance) {
     return messageOut(m);
   });
 
-  app.post('/api/v1/messages/conversations/:contactId/read', async (req) => {
+  app.post('/api/messages/conversations/:contactId/read', async (req) => {
     await requireOwner(req, 'messages:write');
     const c = await getContact((req.params as { contactId: string }).contactId);
     const unread = await ctx.store.find<MessageDoc>('messages', { contactId: c._id, direction: 'in', status: 'received' });
@@ -81,7 +81,7 @@ export default async function messageRoutes(app: FastifyInstance) {
   });
 
   /** Try a failed message again (for example after reconnecting). */
-  app.post('/api/v1/messages/:id/retry', async (req) => {
+  app.post('/api/messages/:id/retry', async (req) => {
     await requireOwner(req, 'messages:write');
     const m = await ctx.store.get<MessageDoc>('messages', (req.params as { id: string }).id);
     if (!m || m.direction !== 'out') throw notFound('message_not_found');

@@ -109,7 +109,7 @@ export function nudgePeers(contactIds: string[] | null) {
       clearTimeout(pending.get(l._id));
       pending.set(l._id, setTimeout(() => {
         pending.delete(l._id);
-        sendSigned(l.peerUrl, '/peer/v1/links/changed', { type: 'link.changed' }).catch(() => { /* they'll catch up on their next sync */ });
+        sendSigned(l.peerUrl, '/peer/links/changed', { type: 'link.changed' }).catch(() => { /* they'll catch up on their next sync */ });
       }, 1500));
     }
   })().catch(() => {});
@@ -124,18 +124,18 @@ export async function contactsSharing(domain: string) {
 export async function syncContact(c: ContactDoc) {
   const link = await linkFor(c);
   if (!link || link.status !== 'active') return c;
-  const profile = (await peerGet(link, '/peer/v1/profile')) as { fields?: ContactDoc['sharedIn'] };
-  const extra = (await peerGet(link, '/peer/v1/fields')) as { fields?: ContactDoc['sharedIn'] };
+  const profile = (await peerGet(link, '/peer/profile')) as { fields?: ContactDoc['sharedIn'] };
+  const extra = (await peerGet(link, '/peer/fields')) as { fields?: ContactDoc['sharedIn'] };
   const seen = new Set<string>();
   const sharedIn = [...(profile.fields || []), ...(extra.fields || [])]
     .filter((f) => f && typeof f.key === 'string' && !seen.has(f.key) && seen.add(f.key))
     .map((f) => ({ key: String(f.key), label: String(f.label).slice(0, 80), value: String(f.value).slice(0, 2000) }));
   // Domains they've granted us. Older nodes don't have this endpoint: treat as none.
   const sharedDomains: SharedDomain[] = [];
-  const list = (await peerGet(link, '/peer/v1/domains').catch(() => ({ domains: [] }))) as { domains?: { id: string }[] };
+  const list = (await peerGet(link, '/peer/domains').catch(() => ({ domains: [] }))) as { domains?: { id: string }[] };
   for (const { id } of (list.domains || []).slice(0, 50)) {
     if (!/^[a-z0-9_]{1,40}$/.test(String(id))) continue;
-    const d = (await peerGet(link, `/peer/v1/domains/${id}`).catch(() => null)) as SharedDomain | null;
+    const d = (await peerGet(link, `/peer/domains/${id}`).catch(() => null)) as SharedDomain | null;
     if (!d || !Array.isArray(d.records)) continue;
     sharedDomains.push({
       domain: id, label: String(d.label).slice(0, 80), scope: d.scope === 'current' ? 'current' : 'all',

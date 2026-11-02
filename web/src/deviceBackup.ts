@@ -41,18 +41,18 @@ const getFolder = () => store<Folder | undefined>((s) => s.get('backupFolder')).
 const keepFolder = (f: Folder | null) => store<unknown>((s) => (f ? s.put(f, 'backupFolder') : s.delete('backupFolder')) as IDBRequest<unknown>, 'readwrite');
 
 async function latest(): Promise<BackupRow | null> {
-  return (await get<{ items: BackupRow[] }>('/api/v1/node/backups')).items.find((b) => b.available) ?? null;
+  return (await get<{ items: BackupRow[] }>('/api/node/backups')).items.find((b) => b.available) ?? null;
 }
 
 async function fetchFile(id: string, via: 'download' | 'folder') {
-  const r = await fetch(`/api/v1/node/backups/${id}/download?via=${via}`, { credentials: 'same-origin' });
+  const r = await fetch(`/api/node/backups/${id}/download?via=${via}`, { credentials: 'same-origin' });
   if (!r.ok) throw new Error('Couldn’t fetch the backup');
   return r.text();
 }
 
 /** Take a fresh backup and save it to this device as a download. */
 export async function downloadFresh() {
-  await post('/api/v1/node/backups');
+  await post('/api/node/backups');
   const b = await latest();
   if (!b) throw new Error('No backup to save yet');
   saveFile(fileName(b.at), await fetchFile(b._id, 'download'));
@@ -66,7 +66,7 @@ export async function downloadBackup(b: BackupRow) {
 /** Save the newest backup into the chosen folder if it isn't there yet, then trim old ones. */
 async function saveToFolder(f: Folder, fresh = false): Promise<'saved' | 'up-to-date' | 'needs-permission'> {
   if ((await f.queryPermission({ mode: 'readwrite' })) !== 'granted') return 'needs-permission';
-  if (fresh) await post('/api/v1/node/backups');
+  if (fresh) await post('/api/node/backups');
   const b = await latest();
   if (!b) return 'up-to-date';
   const name = fileName(b.at);

@@ -8,7 +8,7 @@ type Item = { domain: string; domainLabel: string; id: string; title: string; va
 
 /** Lifestream: your life in order, every dated record across every category. */
 export default function Lifestream() {
-  const { data, error } = useAsync(() => get<{ items: Item[] }>('/api/v1/timeline'), []);
+  const { data, error } = useAsync(() => get<{ items: Item[] }>('/api/timeline'), []);
   const { data: catalog } = useAsync(fetchCatalog, []);
   const [group, setGroup] = useState('all');
   if (error) return <ErrorNote error={error} />;

@@ -56,8 +56,8 @@ export default function RestoreFromBackup({ token, nodeAddr, onBack }: { token: 
     setBusy(true);
     setError('');
     try {
-      const r = await post<Restored>('/api/v1/node/claim/restore', { token, kit: JSON.parse(kit.raw), passphrase, backup: backup.raw });
-      const owner = await get<{ displayName: string }>('/api/v1/owner').catch(() => ({ displayName: '' }));
+      const r = await post<Restored>('/api/node/claim/restore', { token, kit: JSON.parse(kit.raw), passphrase, backup: backup.raw });
+      const owner = await get<{ displayName: string }>('/api/owner').catch(() => ({ displayName: '' }));
       setDone({ ...r, name: owner.displayName });
     } catch (e) {
       setError((e as Error).message);
@@ -69,9 +69,9 @@ export default function RestoreFromBackup({ token, nodeAddr, onBack }: { token: 
   const addPasskey = async () => {
     setPasskey('pending');
     try {
-      const { challengeId, options } = await post('/api/v1/auth/passkeys/register/options');
+      const { challengeId, options } = await post('/api/auth/passkeys/register/options');
       const response = await startRegistration({ optionsJSON: options });
-      await post('/api/v1/auth/passkeys/register', { challengeId, response, label: 'This device' });
+      await post('/api/auth/passkeys/register', { challengeId, response, label: 'This device' });
       setPasskey('done');
     } catch (e) {
       setPasskey('idle');

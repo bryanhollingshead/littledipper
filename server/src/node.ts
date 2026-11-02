@@ -51,8 +51,17 @@ export function canonicalUrl(n: NodeDoc): string {
 /** Display form without scheme: "maya-ld.onrender.com". */
 export const displayAddr = (url: string) => url.replace(/^https?:\/\//, '');
 
-/** What this node can do, advertised in its descriptor. Additive only: a capability is never withdrawn (docs/COMPATIBILITY.md VII). */
-export const CAPABILITIES = ['messages'] as const;
+/**
+ * What this release's software can do, advertised in its descriptor. It never describes the owner's data:
+ * every node on the same release lists the same names. What a contact may see is a grant, not a capability.
+ * Additive only: a capability is never withdrawn (docs/COMPATIBILITY.md VII). Meanings are listed there too.
+ */
+export const CAPABILITIES = [
+  'records', 'records.history', 'records.provenance', 'parts.datetime',
+  'calendar', 'calendar.share',
+  'documents', 'documents.share-links', 'copies', 'messages',
+  'address-change', 'backups.device', 'recovery-kit', 'restore',
+] as const;
 
 export function descriptor(n: NodeDoc, displayName: string | null, connectRequests: string) {
   const base = canonicalUrl(n);
@@ -66,7 +75,8 @@ export function descriptor(n: NodeDoc, displayName: string | null, connectReques
     address: base,
     addresses: [n.addresses.host, ...(n.addresses.domain && n.addresses.domainStatus === 'active' ? [originOf(n.addresses.domain)] : [])],
     profile: `${base}/`,
-    federation: `${base}/peer/v1`,
+    api: `${base}/api`,
+    federation: `${base}/peer`,
     connectRequests,
     claimed: n.claimed,
     capabilities: [...CAPABILITIES],

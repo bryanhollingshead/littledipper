@@ -4,7 +4,7 @@
 
 ## Problem
 
-Several domains need a lot of clicking and navigating to fill in. Every record goes through the same side panel, one at a time: open the domain, **Add**, fill in the main fields, expand **More details**, set dates, save, repeat. The panel is `RecordEditor` in `web/src/life.tsx`. There are 24 domains. Entering ten years of residences or a full work history means dozens of round-trips through the panel. The API has the same limit: one record per `POST /api/v1/data/{domain}`.
+Several domains need a lot of clicking and navigating to fill in. Every record goes through the same side panel, one at a time: open the domain, **Add**, fill in the main fields, expand **More details**, set dates, save, repeat. The panel is `RecordEditor` in `web/src/life.tsx`. There are 24 domains. Entering ten years of residences or a full work history means dozens of round-trips through the panel. The API has the same limit: one record per `POST /api/data/{domain}`.
 
 Both humans and AIs will fill in much of this data, so data-entry UX needs serious design attention.
 
@@ -33,7 +33,7 @@ Ideas to work through when designing it:
 Still to design:
 - Which tools and resources the MCP server exposes: read and search records, write records, list domains.
 - How it's authenticated: reuse API keys and scopes (`records:read`, `{domain}:write`…), so the owner controls what an AI can see and change.
-- Where it runs: built into the node (a reserved `/api/v1/mcp` path) or as a separate package that calls the REST API.
+- Where it runs: built into the node (a reserved `/api/mcp` path) or as a separate package that calls the REST API.
 - Depends on the AI invitation design below for anything that writes data.
 
 ## Documents module
@@ -56,4 +56,4 @@ Not until the AI invitation design exists. Captured from the discussion so far:
 
 ## Route names
 
-Custom domain ids always start with `x_` (a custom "Documents" becomes `x_documents`), so owners can't take a name a future module needs. The remaining risk is a **built-in** domain added in code using the same id as a fixed route such as `/api/v1/documents`. A test that checks built-in domain ids against the registered routes would catch that.
+Custom domain ids always start with `x_` (a custom "Documents" becomes `x_documents`), so owners can't take a name a future module needs. The remaining risk is a **built-in** domain added in code using the same id as a fixed route such as `/api/documents`. A test that checks built-in domain ids against the registered routes would catch that.

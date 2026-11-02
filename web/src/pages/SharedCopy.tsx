@@ -9,8 +9,8 @@ type Shared = { title: string; note: string; sharedBy: string; createdAt: string
 /** What someone without a Little Dipper sees when the owner sends them a copy of some entries. */
 export default function SharedCopy() {
   const { token = '' } = useParams();
-  const { data, error } = useAsync(() => get<Shared>(`/public/v1/copies/${encodeURIComponent(token)}`), [token]);
-  const dl = (f: string) => `/public/v1/copies/${encodeURIComponent(token)}/download?format=${f}`;
+  const { data, error } = useAsync(() => get<Shared>(`/public/copies/${encodeURIComponent(token)}`), [token]);
+  const dl = (f: string) => `/public/copies/${encodeURIComponent(token)}/download?format=${f}`;
   return (
     <div style={{ minHeight: '100%', background: 'var(--color-bg)', padding: '32px 16px 64px' }}>
       <div style={{ maxWidth: 760, margin: '0 auto' }}>

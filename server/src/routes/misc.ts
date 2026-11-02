@@ -19,7 +19,7 @@ async function profileDoc() {
 
 export default async function miscRoutes(app: FastifyInstance) {
   // ── public profile ───────────────────────────────────────────────────
-  app.get('/public/v1/profile', async (req) => {
+  app.get('/public/profile', async (req) => {
     const n = await getNode();
     if (!n.claimed) throw notFound('not_claimed');
     const pp = await profileDoc();
@@ -36,7 +36,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get('/public/v1/invites/:token', async (req) => {
+  app.get('/public/invites/:token', async (req) => {
     const { token } = req.params as { token: string };
     const [id, secret] = token.split('.');
     const inv = await ctx.store.get<InviteDoc>('invites', id || '');
@@ -46,13 +46,13 @@ export default async function miscRoutes(app: FastifyInstance) {
     return { valid, displayName: pp?.displayName || null, address: canonicalUrl(n), expiresAt: valid ? inv!.expiresAt : null };
   });
 
-  app.get('/api/v1/public-profile', async (req) => {
+  app.get('/api/public-profile', async (req) => {
     await requireOwner(req, 'owner:read');
     const pp = await profileDoc();
     return { ...pp, sections: sectionsOf(pp), fields: await publicFields(pp), view: await publicView(pp) };
   });
 
-  app.put('/api/v1/public-profile', async (req) => {
+  app.put('/api/public-profile', async (req) => {
     const p = await requireOwner(req, 'public:write');
     const pp = await profileDoc();
     const b = (req.body || {}) as Partial<Pick<PublicProfileDoc, 'displayName' | 'headline' | 'fieldKeys' | 'connectRequests' | 'sections'>>;
@@ -83,7 +83,7 @@ export default async function miscRoutes(app: FastifyInstance) {
   });
 
   // ── keys ─────────────────────────────────────────────────────────────
-  app.get('/api/v1/keys', async (req) => {
+  app.get('/api/keys', async (req) => {
     const p = await requireOwner(req, 'keys:manage');
     const all = await ctx.store.find<ApiKeyDoc>('apiKeys', { kind: { $in: ['session', 'app', 'peer'] } }, { sort: { createdAt: 1 } });
     const live = all.filter((k) => !k.revokedAt && (!k.expiresAt || new Date(k.expiresAt).getTime() > Date.now()));
@@ -97,7 +97,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/api/v1/keys', async (req, reply) => {
+  app.post('/api/keys', async (req, reply) => {
     const p = await requireOwner(req, 'keys:manage');
     const b = (req.body || {}) as { name?: string; scopes?: string[] };
     // Fixed scopes plus {domain}:read / {domain}:write for every domain in the catalog.
@@ -114,7 +114,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     return { id: doc._id, name, scopes, prefix: doc.prefix, secret };
   });
 
-  app.delete('/api/v1/keys/:id', async (req) => {
+  app.delete('/api/keys/:id', async (req) => {
     const p = await requireOwner(req, 'keys:manage');
     const { id } = req.params as { id: string };
     const k = await ctx.store.get<ApiKeyDoc>('apiKeys', id);
@@ -125,7 +125,7 @@ export default async function miscRoutes(app: FastifyInstance) {
       const c = await ctx.store.get<ContactDoc>('contacts', k.contactId);
       const link = c?.node ? await ctx.store.get<LinkDoc>('nodeLinks', c.node.linkId) : null;
       if (link && link.status !== 'revoked') {
-        try { await sendSigned(link.peerUrl, '/peer/v1/links/revoke', { type: 'link.revoke' }); } catch { /* best effort */ }
+        try { await sendSigned(link.peerUrl, '/peer/links/revoke', { type: 'link.revoke' }); } catch { /* best effort */ }
         await endLink(link, 'Disconnected');
       }
     }
@@ -135,7 +135,7 @@ export default async function miscRoutes(app: FastifyInstance) {
   });
 
   // ── audit ────────────────────────────────────────────────────────────
-  app.get('/api/v1/audit', async (req) => {
+  app.get('/api/audit', async (req) => {
     await requireOwner(req, 'audit:read');
     const q = req.query as { limit?: string; before?: string; action?: string };
     const limit = Math.min(200, Math.max(1, Number(q.limit) || 50));

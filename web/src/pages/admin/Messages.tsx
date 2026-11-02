@@ -31,7 +31,7 @@ export default function Messages() {
   const { contactId } = useParams();
   const nav = useNavigate();
   const [picking, setPicking] = useState(false);
-  const { data, error, reload } = useAsync(() => get<{ items: Conversation[] }>('/api/v1/messages/conversations'), []);
+  const { data, error, reload } = useAsync(() => get<{ items: Conversation[] }>('/api/messages/conversations'), []);
 
   useEffect(() => {
     const t = setInterval(reload, POLL_MS);
@@ -84,7 +84,7 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
   const { run, busy } = useAction();
   const [text, setText] = useState('');
   const end = useRef<HTMLDivElement>(null);
-  const { data, error, reload } = useAsync(() => get<{ contact: Conversation['contact']; canMessage: boolean; items: Message[] }>(`/api/v1/messages/conversations/${contactId}`), [contactId]);
+  const { data, error, reload } = useAsync(() => get<{ contact: Conversation['contact']; canMessage: boolean; items: Message[] }>(`/api/messages/conversations/${contactId}`), [contactId]);
 
   useEffect(() => {
     const t = setInterval(reload, POLL_MS);
@@ -96,7 +96,7 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
   const unread = data?.items.filter((m) => m.direction === 'in' && m.status === 'received').length ?? 0;
   useEffect(() => {
     if (!unread) return;
-    post(`/api/v1/messages/conversations/${contactId}/read`).then(() => { refresh(); onChange(); }).catch(() => {});
+    post(`/api/messages/conversations/${contactId}/read`).then(() => { refresh(); onChange(); }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unread, contactId]);
 
@@ -110,10 +110,10 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
   const send = async () => {
     const body = text.trim();
     if (!body) return;
-    const m = await run(() => post<Message>(`/api/v1/messages/conversations/${contactId}`, { body }));
+    const m = await run(() => post<Message>(`/api/messages/conversations/${contactId}`, { body }));
     if (m) { setText(''); reload(); onChange(); }
   };
-  const retry = async (m: Message) => { if (await run(() => post(`/api/v1/messages/${m.id}/retry`))) { reload(); onChange(); } };
+  const retry = async (m: Message) => { if (await run(() => post(`/api/messages/${m.id}/retry`))) { reload(); onChange(); } };
 
   return (
     <div className="card" style={{ padding: 0, gap: 0, overflow: 'hidden' }}>
@@ -164,7 +164,7 @@ function Thread({ contactId, onChange }: { contactId: string; onChange: () => vo
 }
 
 function PickContact({ onClose, onPick }: { onClose: () => void; onPick: (id: string) => void }) {
-  const { data, error } = useAsync(() => get<{ items: Contact[] }>('/api/v1/contacts'), []);
+  const { data, error } = useAsync(() => get<{ items: Contact[] }>('/api/contacts'), []);
   const connected = (data?.items || []).filter((c) => c.kind === 'node' && c.status === 'active');
   return (
     <Dialog title="New message" onClose={onClose} width={440}>

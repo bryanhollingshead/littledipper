@@ -22,7 +22,7 @@ const ICON: Record<string, ReactNode> = {
 export default function BigDipperBanner() {
   const nav = useNavigate();
   const [hidden, setHidden] = useState(readHidden);
-  const { data: bd } = useAsync(() => get<BigDipper>('/api/v1/big-dipper'), []);
+  const { data: bd } = useAsync(() => get<BigDipper>('/api/big-dipper'), []);
 
   if (!bd || bd.contact?.status === 'active') return null;
   if (hidden) {

@@ -1,5 +1,5 @@
 /**
- * GET /api/v1/calendar: everything on the owner's calendar between two dates. Served here so any
+ * GET /api/calendar: everything on the owner's calendar between two dates. Served here so any
  * skin can build the same view (Commandment XI); the logic lives in calendar.ts.
  */
 import type { FastifyInstance } from 'fastify';
@@ -10,7 +10,7 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_DAYS = 400;
 
 export default async function calendarRoutes(app: FastifyInstance) {
-  app.get('/api/v1/calendar', async (req) => {
+  app.get('/api/calendar', async (req) => {
     const p = await requireOwner(req, ['records:read', 'events:read']);
     const q = req.query as { from?: string; to?: string };
     if (!DAY.test(q.from ?? '') || !DAY.test(q.to ?? '')) throw bad('invalid_range', 'Give from and to as YYYY-MM-DD');

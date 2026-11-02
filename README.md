@@ -71,7 +71,7 @@ The smoke test starts two instances, claims both with a software passkey, then r
 
 ## Data model: domains
 
-Personal data is organised into **domains**, one per category. Each domain has its own endpoint (`/api/v1/data/{domain}`), its own grant in the contact admin and its own app-key scopes (`{domain}:read`, `{domain}:write`; `records:read`/`records:write` cover every domain).
+Personal data is organised into **domains**, one per category. Each domain has its own endpoint (`/api/data/{domain}`), its own grant in the contact admin and its own app-key scopes (`{domain}:read`, `{domain}:write`; `records:read`/`records:write` cover every domain).
 
 | Group | Domains |
 |---|---|
@@ -83,13 +83,13 @@ Personal data is organised into **domains**, one per category. Each domain has i
 | Things | `vehicles`, `property`, `memberships`, `online_accounts` |
 | Personal | `preferences` |
 
-- **Definitions** live in `server/src/domains/catalog.ts`: parts, types, sensitivity, whether records are dated and the display title. Owners can add their own categories (`POST /api/v1/catalog`, ids `x_…`).
+- **Definitions** live in `server/src/domains/catalog.ts`: parts, types, sensitivity, whether records are dated and the display title. Owners can add their own categories (`POST /api/catalog`, ids `x_…`).
 - **Records** are one JSON document each in the `records` collection, with `validFrom`/`validTo` partial dates (`2019`, `2019-06`, `2019-06-14`). "Current" means no end date.
 - **Secret parts** (ID numbers, pay, account details…) are encrypted one by one, masked in the API, and revealed only through a logged call.
 - **One source of truth**: the profile's Current address, Current city and Country of residence mirror the current residence; Email and Mobile phone mirror the primary contact methods.
-- **Sharing**: grant a contact a whole domain, either every record or current only. Secret parts are shared only with explicit confirmation. Peers read `GET /peer/v1/domains/{domain}`.
+- **Sharing**: grant a contact a whole domain, either every record or current only. Secret parts are shared only with explicit confirmation. Peers read `GET /peer/domains/{domain}`.
 - **Copies**: for people without a Little Dipper, send a snapshot of chosen entries as a link (which can expire), a PDF/JSON/text file, or text in an email. A new email address becomes a contact. See [docs/design/COPIES.md](docs/design/COPIES.md).
-- **Timeline**: `GET /api/v1/timeline` merges every dated record across domains.
+- **Timeline**: `GET /api/timeline` merges every dated record across domains.
 
 Card and bank numbers are stored as the last four digits only, and the model has no place for passwords.
 
@@ -99,8 +99,8 @@ Card and bank numbers are stored as the last four digits only, and the model has
 - **Sign-in**: passkeys (WebAuthn). Fallback is a password (argon2id) plus an authenticator code (TOTP), set up in Settings → Security. There are 8 single-use recovery codes, stored hashed.
 - **Sessions and keys**: browser sessions, app keys and peer tokens share one `apiKeys` shape. Only a hash and a display prefix are stored. The browser session holds `admin:*`; app keys carry scopes (`owner:read`, `contacts:write`, …).
 - **Fields**: each field is Standard, Sensitive or Secret. Secret values are AES-256-GCM encrypted at rest, masked in the API, never public, and every reveal is audited.
-- **Connections**: every peer→peer write is a signed envelope (ed25519 over canonical JSON, with a timestamp and a nonce for replay protection). Request → accept exchanges scoped bearer tokens both ways. Peers read `GET /peer/v1/profile` (the basic profile) and `GET /peer/v1/fields` (per-field extras). Rotate, disconnect and address-change are signed messages too. Requests are allowed by `connectRequests` (`off` / `fof` / `anyone`) or by a single-use invite link.
-- **Addresses**: the canonical address is a verified custom domain, otherwise the host address. Changing it sends `/peer/v1/address-change` to every connection. Retired domains redirect for 90 days.
+- **Connections**: every peer→peer write is a signed envelope (ed25519 over canonical JSON, with a timestamp and a nonce for replay protection). Request → accept exchanges scoped bearer tokens both ways. Peers read `GET /peer/profile` (the basic profile) and `GET /peer/fields` (per-field extras). Rotate, disconnect and address-change are signed messages too. Requests are allowed by `connectRequests` (`off` / `fof` / `anyone`) or by a single-use invite link.
+- **Addresses**: the canonical address is a verified custom domain, otherwise the host address. Changing it sends `/peer/address-change` to every connection. Retired domains redirect for 90 days.
 - **Backups**: nightly at 03:00, encrypted with the node's master key, kept 30 days. A recovery kit (passphrase-encrypted signing key + master key) restores the same identity on new hardware (`little-dipper restore-kit <file>`), then `little-dipper restore-backup <file.ldbackup>` brings back the data. Settings → Backups saves `.ldbackup` files to the owner's device and reminds them weekly until one has.
 
 **Settings → Show technical details** turns on the Build reference pages (Data model, Endpoints) and the API Explorer.

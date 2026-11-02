@@ -55,7 +55,7 @@ export default function Setup() {
   const tried = useRef(false);
 
   useEffect(() => {
-    get<Status & { hosting: { label: string } }>('/api/v1/node/status').then((s) => {
+    get<Status & { hosting: { label: string } }>('/api/node/status').then((s) => {
       setStatus(s);
       const l = s.hosting.label.toLowerCase();
       setHostTab(l.includes('render') ? 'render' : l.includes('docker') ? 'docker' : 'vps');
@@ -66,7 +66,7 @@ export default function Setup() {
   useEffect(() => {
     if (!token || tried.current) return;
     tried.current = true;
-    post<{ mode: 'claim' | 'transfer' }>('/api/v1/node/claim', { token })
+    post<{ mode: 'claim' | 'transfer' }>('/api/node/claim', { token })
       .then((r) => { setMode(r.mode); setVerified('yes'); })
       .catch(() => { setVerified('no'); setClaimError(true); });
   }, [token]);
@@ -85,7 +85,7 @@ export default function Setup() {
   const submitClaim = async () => {
     setBusy(true);
     try {
-      const r = await post<{ mode: 'claim' | 'transfer' }>('/api/v1/node/claim', { token: claimInput });
+      const r = await post<{ mode: 'claim' | 'transfer' }>('/api/node/claim', { token: claimInput });
       setMode(r.mode);
       setVerified('yes');
     } catch {
@@ -99,7 +99,7 @@ export default function Setup() {
     setFormError('');
     setBusy(true);
     try {
-      await post('/api/v1/owner', { displayName: form.name, email: form.email });
+      await post('/api/owner', { displayName: form.name, email: form.email });
       setStep(2);
     } catch (e) {
       setFormError((e as Error).message);
@@ -111,10 +111,10 @@ export default function Setup() {
   const createPasskey = async () => {
     setPasskey('pending');
     try {
-      const { challengeId, options } = await post('/api/v1/auth/passkeys/register/options');
+      const { challengeId, options } = await post('/api/auth/passkeys/register/options');
       const response = await startRegistration({ optionsJSON: options });
-      await post('/api/v1/auth/passkeys/register', { challengeId, response, label: 'This device' });
-      const r = await post<{ codes: string[] }>('/api/v1/auth/recovery-codes');
+      await post('/api/auth/passkeys/register', { challengeId, response, label: 'This device' });
+      const r = await post<{ codes: string[] }>('/api/auth/recovery-codes');
       setCodes(r.codes);
       setPasskey('done');
     } catch (e) {
@@ -126,7 +126,7 @@ export default function Setup() {
   const finish = async () => {
     setBusy(true);
     try {
-      await post('/api/v1/node/claim/complete');
+      await post('/api/node/claim/complete');
       setStep(3);
     } catch (e) {
       toast((e as Error).message);

@@ -8,7 +8,7 @@ let kindsCache: Promise<Kinds> | null = null;
 export function useDocKinds() {
   const [k, setK] = useState<Kinds | null>(null);
   useEffect(() => {
-    kindsCache ??= get<Kinds>('/api/v1/documents/kinds').catch((e) => { kindsCache = null; throw e; });
+    kindsCache ??= get<Kinds>('/api/documents/kinds').catch((e) => { kindsCache = null; throw e; });
     kindsCache.then(setK).catch(() => {});
   }, []);
   return k;

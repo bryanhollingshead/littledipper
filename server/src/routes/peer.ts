@@ -43,7 +43,7 @@ async function peerContact(req: FastifyRequest) {
 }
 
 export default async function peerRoutes(app: FastifyInstance) {
-  app.post('/peer/v1/requests', async (req, reply) => {
+  app.post('/peer/requests', async (req, reply) => {
     rateLimit(req, 'peer-request', 20, 60 * 60_000);
     const body = req.body as { payload?: { fromNode?: Intro } };
     const intro = body?.payload?.fromNode;
@@ -109,7 +109,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     return { received: true };
   });
 
-  app.post('/peer/v1/requests/:requestId/accept', async (req) => {
+  app.post('/peer/requests/:requestId/accept', async (req) => {
     const { requestId } = req.params as { requestId: string };
     const { link, payload } = await verifiedLink<{ type: string; requestId: string; token: string; version?: string }>(req.body, ['pending_out']);
     if (payload.type !== 'connect.accept' || payload.requestId !== requestId || link.requestId !== requestId || !payload.token) throw bad('bad_accept');
@@ -130,7 +130,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     return signedReply({ type: 'connect.accepted', requestId, token: secret });
   });
 
-  app.post('/peer/v1/requests/:requestId/decline', async (req) => {
+  app.post('/peer/requests/:requestId/decline', async (req) => {
     const { requestId } = req.params as { requestId: string };
     const { link, payload } = await verifiedLink<{ type: string; requestId: string }>(req.body, ['pending_out']);
     if (payload.type !== 'connect.decline' || link.requestId !== requestId) throw bad('bad_decline');
@@ -143,7 +143,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/peer/v1/links/revoke', async (req) => {
+  app.post('/peer/links/revoke', async (req) => {
     const { link, payload } = await verifiedLink<{ type: string }>(req.body, ['active', 'pending_out', 'pending_in']);
     if (payload.type !== 'link.revoke') throw bad('bad_revoke');
     const contact = await ctx.store.get<ContactDoc>('contacts', link.contactId);
@@ -152,7 +152,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/peer/v1/links/rotate', async (req) => {
+  app.post('/peer/links/rotate', async (req) => {
     const { link, payload } = await verifiedLink<{ type: string; token: string }>(req.body, ['active']);
     if (payload.type !== 'link.rotate' || !payload.token) throw bad('bad_rotate');
     const contact = (await ctx.store.get<ContactDoc>('contacts', link.contactId))!;
@@ -164,7 +164,7 @@ export default async function peerRoutes(app: FastifyInstance) {
   });
 
   /** Signed nudge: what they share with us changed. Sync now (in the background). */
-  app.post('/peer/v1/links/changed', async (req, reply) => {
+  app.post('/peer/links/changed', async (req, reply) => {
     const { link, payload } = await verifiedLink<{ type: string }>(req.body, ['active']);
     if (payload.type !== 'link.changed') throw bad('bad_nudge');
     setTimeout(() => { ctx.store.get<ContactDoc>('contacts', link.contactId).then((c) => c && syncContact(c)).catch(() => {}); }, 100);
@@ -173,7 +173,7 @@ export default async function peerRoutes(app: FastifyInstance) {
   });
 
   /** Signed notice that a peer moved. Verified against the stored key, then peerUrl is updated. */
-  app.post('/peer/v1/address-change', async (req, reply) => {
+  app.post('/peer/address-change', async (req, reply) => {
     const { link, payload } = await verifiedLink<{ type: string; nodeId: string; newAddress: string }>(req.body, ['active', 'pending_in', 'pending_out']);
     if (payload.type !== 'address.change' || payload.nodeId !== link.peerNodeId) throw bad('bad_address_change');
     const origin = parsePeerInput(payload.newAddress).origin;
@@ -189,7 +189,7 @@ export default async function peerRoutes(app: FastifyInstance) {
   });
 
   /** A message from a connected contact. The sender picks the id, so a retried delivery returns 200 without storing twice. */
-  app.post('/peer/v1/messages', async (req, reply) => {
+  app.post('/peer/messages', async (req, reply) => {
     rateLimit(req, 'peer-message', 600, 60 * 60_000);
     const { link, payload } = await verifiedLink<WireMessage>(req.body, ['active']);
     const r = await receiveMessage(link, payload as WireMessage);
@@ -198,7 +198,7 @@ export default async function peerRoutes(app: FastifyInstance) {
   });
 
   /** Basic profile: every Standard field. Granted by default on connect (scope peer:profile). */
-  app.get('/peer/v1/profile', async (req) => {
+  app.get('/peer/profile', async (req) => {
     const c = await peerContact(req);
     const fields = await sharedOut(c._id, 'profile');
     await audit({ actor: { type: 'peer', id: c.node?.nodeId || c._id }, action: 'peer.read', resource: 'peer/profile', text: `${c.displayName}'s Little Dipper read your basic profile`, tone: 'peer', ip: req.ip });
@@ -207,7 +207,7 @@ export default async function peerRoutes(app: FastifyInstance) {
   });
 
   /** Domains this contact has been granted (employment, residences…). */
-  app.get('/peer/v1/domains', async (req) => {
+  app.get('/peer/domains', async (req) => {
     const c = await peerContact(req);
     const g = await grantsFor(c._id);
     const out = [];
@@ -218,7 +218,7 @@ export default async function peerRoutes(app: FastifyInstance) {
     return { domains: out };
   });
 
-  app.get('/peer/v1/domains/:domain', async (req) => {
+  app.get('/peer/domains/:domain', async (req) => {
     const c = await peerContact(req);
     const { domain } = req.params as { domain: string };
     const shared = await sharedDomainOut(c._id, domain);
@@ -228,7 +228,7 @@ export default async function peerRoutes(app: FastifyInstance) {
   });
 
   /** Extra fields granted one by one (Sensitive or Secret). Returns only those. */
-  app.get('/peer/v1/fields', async (req) => {
+  app.get('/peer/fields', async (req) => {
     const c = await peerContact(req);
     const fields = await sharedOut(c._id, 'fields');
     if (fields.length) {

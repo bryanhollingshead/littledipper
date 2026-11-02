@@ -9,9 +9,9 @@ type Attention = { domain: string; domainLabel: string; id: string; title: strin
 export default function LifeHub() {
   const nav = useNavigate();
   const { data: domains, error, reload } = useAsync(fetchCatalog, []);
-  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/v1/owner/fields'), []);
-  const { data: attention } = useAsync(() => get<{ items: Attention[] }>('/api/v1/attention'), []);
-  const { data: timeline } = useAsync(() => get<{ items: { validFrom: string }[] }>('/api/v1/timeline'), []);
+  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/owner/fields'), []);
+  const { data: attention } = useAsync(() => get<{ items: Attention[] }>('/api/attention'), []);
+  const { data: timeline } = useAsync(() => get<{ items: { validFrom: string }[] }>('/api/timeline'), []);
   const [q, setQ] = useState('');
   const [creating, setCreating] = useState(false);
   const grouped = useGrouped(domains?.filter((d) => !q || `${d.label} ${d.description}`.toLowerCase().includes(q.toLowerCase())));
@@ -143,7 +143,7 @@ function NewCategory({ onClose, onDone }: { onClose: () => void; onDone: (id: st
   const [sensitivity, setSensitivity] = useState<'standard' | 'sensitive' | 'secret'>('sensitive');
   const [parts, setParts] = useState([{ label: '', type: 'text', required: true }, { label: '', type: 'text', required: false }]);
   const create = async () => {
-    const r = await run(() => post<{ id: string }>('/api/v1/catalog', { label, dated, sensitivity, parts: parts.filter((p) => p.label.trim()).map((p) => ({ ...p, key: p.label })) }), `${label} created`);
+    const r = await run(() => post<{ id: string }>('/api/catalog', { label, dated, sensitivity, parts: parts.filter((p) => p.label.trim()).map((p) => ({ ...p, key: p.label })) }), `${label} created`);
     if (r) onDone(r.id);
   };
   return (

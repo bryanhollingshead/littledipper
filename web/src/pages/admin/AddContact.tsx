@@ -19,7 +19,7 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
   const [note, setNote] = useState('');
   const [exp, setExp] = useState<'24h' | '7d' | '30d'>('7d');
   const [invite, setInvite] = useState<{ url: string; expiresAt: string } | null>(null);
-  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/v1/owner/fields'), []);
+  const { data: fields } = useAsync(() => get<{ items: Field[] }>('/api/owner/fields'), []);
 
   const sensitive = (fields?.items || []).filter((f) => f.sensitivity === 'sensitive' && f.hasValue);
   const name = found?.displayName || found?.address || '';
@@ -28,7 +28,7 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
     setLookupError('');
     setFound(null);
     try {
-      setFound(await post<Lookup>('/api/v1/federation/lookup', { address: nodeUrl }));
+      setFound(await post<Lookup>('/api/federation/lookup', { address: nodeUrl }));
     } catch (e) {
       setLookupError((e as Error).message);
     }
@@ -36,17 +36,17 @@ export default function AddContact({ initialTab = 'person', onClose, onDone }: {
 
   const savePerson = async () => {
     if (!person.name.trim()) return toast('Add a name first');
-    const r = await run(() => post('/api/v1/contacts', { displayName: person.name, email: person.email, phone: person.phone, address: person.address }), `${person.name} added`);
+    const r = await run(() => post('/api/contacts', { displayName: person.name, email: person.email, phone: person.phone, address: person.address }), `${person.name} added`);
     if (r) onDone(r.id);
   };
 
   const send = async () => {
-    const r = await run(() => post('/api/v1/federation/requests', { address: nodeUrl, offeredFields: Object.keys(offer).filter((k) => offer[k]), note }), `Request sent to ${firstName(name)}`);
+    const r = await run(() => post('/api/federation/requests', { address: nodeUrl, offeredFields: Object.keys(offer).filter((k) => offer[k]), note }), `Request sent to ${firstName(name)}`);
     if (r) onDone(r.contactId);
   };
 
   const createInvite = async () => {
-    const r = await run(() => post('/api/v1/federation/invites', { expiresIn: exp }));
+    const r = await run(() => post('/api/federation/invites', { expiresIn: exp }));
     if (r) setInvite(r);
   };
 

@@ -1,5 +1,5 @@
 /**
- * The built-in global data model. Each domain is its own endpoint (/api/v1/{id}),
+ * The built-in global data model. Each domain is its own endpoint (/api/data/{id}),
  * its own grant in the contact admin, and its own scope for app keys.
  * Bump schemaVersion when a domain's parts change shape.
  */
@@ -392,7 +392,7 @@ const DEFS: Def[] = [
 
 export const BUILT_IN_DOMAINS: DomainDef[] = DEFS.map((d) => ({ ...d, builtIn: true, schemaVersion: d.schemaVersion ?? 1 }));
 
-/** Paths under /api/v1 that domains may never use. */
+/** Names domains may never use: they would read as API sections (/api/{name}). */
 export const RESERVED = new Set([
   'node', 'auth', 'owner', 'contacts', 'federation', 'public-profile', 'keys', 'audit', 'export', 'catalog', 'timeline', 'attention', 'records', 'files', 'documents', 'shares', 'copies', 'domains', 'messages',
 ]);

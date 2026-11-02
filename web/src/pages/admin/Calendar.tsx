@@ -4,7 +4,7 @@ import { get } from '../../api';
 import { ErrorNote, Loading, Pills, useAction, useAsync } from '../../ui';
 import { fetchCatalog, localZone, RecordEditor, useContactsLite, type DateTime, type Rec } from '../../life';
 
-/** One thing on the calendar, as GET /api/v1/calendar returns it. */
+/** One thing on the calendar, as GET /api/calendar returns it. */
 export type CalItem = {
   id: string; kind: 'event' | 'birthday' | 'trip' | 'milestone' | 'deadline' | 'expiry' | 'moment';
   title: string; detail?: string; startDate: string; endDate: string; allDay: boolean;
@@ -83,7 +83,7 @@ export default function Calendar() {
   const weeks = Math.ceil((offset + daysInMonth) / 7);
   const gridEnd = addDays(gridStart, weeks * 7 - 1);
 
-  const { data, error } = useAsync(() => get<{ items: CalItem[] }>(`/api/v1/calendar?from=${gridStart}&to=${gridEnd}`), [gridStart, gridEnd, version]);
+  const { data, error } = useAsync(() => get<{ items: CalItem[] }>(`/api/calendar?from=${gridStart}&to=${gridEnd}`), [gridStart, gridEnd, version]);
   const { data: catalog, reload: reloadCatalog } = useAsync(fetchCatalog, [version]);
   const events = catalog?.find((d) => d.id === 'events');
 
@@ -95,7 +95,7 @@ export default function Calendar() {
   const open = async (i: CalItem) => {
     if (i.contact) return navigate(`/admin/contacts/${i.contact.id}`);
     if (i.domain !== 'events') return navigate(`/admin/life/${i.domain}`);
-    const rec = await run(() => get<Rec>(`/api/v1/data/events/${i.recordId}`));
+    const rec = await run(() => get<Rec>(`/api/data/events/${i.recordId}`));
     if (rec) setEditing(rec);
   };
 

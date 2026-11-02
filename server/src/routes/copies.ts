@@ -38,7 +38,7 @@ async function sendCopy(reply: FastifyReply, c: CopyDoc, format: Format) {
 
 export default async function copyRoutes(app: FastifyInstance) {
   // Owner's browser only, like share links: sending data out is an outward-facing act.
-  app.get('/api/v1/copies', async (req) => {
+  app.get('/api/copies', async (req) => {
     await requireSession(req);
     const q = req.query as { contactId?: string; domain?: string };
     let all = await ctx.store.find<CopyDoc>('copies', {}, { sort: { createdAt: -1 } });
@@ -48,7 +48,7 @@ export default async function copyRoutes(app: FastifyInstance) {
   });
 
   /** Take the snapshot; make the link; find or add the contact; write the email for the owner's mail app. */
-  app.post('/api/v1/copies', async (req, reply) => {
+  app.post('/api/copies', async (req, reply) => {
     const p = await requireSession(req);
     const b = (req.body || {}) as CreateBody;
     const delivery = b.delivery ?? 'link';
@@ -80,7 +80,7 @@ export default async function copyRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get('/api/v1/copies/:id', async (req) => {
+  app.get('/api/copies/:id', async (req) => {
     await requireSession(req);
     const c = await ctx.store.get<CopyDoc>('copies', (req.params as { id: string }).id);
     if (!c) throw notFound('copy_not_found');
@@ -88,7 +88,7 @@ export default async function copyRoutes(app: FastifyInstance) {
   });
 
   /** The owner's own download, to attach to an email. */
-  app.get('/api/v1/copies/:id/download', async (req, reply) => {
+  app.get('/api/copies/:id/download', async (req, reply) => {
     await requireSession(req);
     const c = await ctx.store.get<CopyDoc>('copies', (req.params as { id: string }).id);
     if (!c) throw notFound('copy_not_found');
@@ -96,7 +96,7 @@ export default async function copyRoutes(app: FastifyInstance) {
   });
 
   /** Turn the link off. ?forget=1 also deletes the copy from your history. */
-  app.delete('/api/v1/copies/:id', async (req) => {
+  app.delete('/api/copies/:id', async (req) => {
     const p = await requireSession(req);
     const c = await ctx.store.get<CopyDoc>('copies', (req.params as { id: string }).id);
     if (!c) throw notFound('copy_not_found');
@@ -116,7 +116,7 @@ export default async function copyRoutes(app: FastifyInstance) {
     return c;
   };
 
-  app.get('/public/v1/copies/:token', async (req, reply) => {
+  app.get('/public/copies/:token', async (req, reply) => {
     const c = await openCopy(req);
     await ctx.store.update('copies', c._id, { views: c.views + 1, lastViewedAt: new Date().toISOString() });
     await audit({ actor: { type: 'public', id: c._id }, action: 'copy.view', resource: `copies/${c._id}`, text: `Someone opened your copy of ${c.title}`, tone: 'system', ip: req.ip });
@@ -125,7 +125,7 @@ export default async function copyRoutes(app: FastifyInstance) {
     return { title: c.title, note: c.note, sharedBy: await ownerName(), createdAt: c.createdAt, expiresAt: c.expiresAt, categories: snapshotOf(c).map(({ scope, ...s }) => s) };
   });
 
-  app.get('/public/v1/copies/:token/download', async (req, reply) => {
+  app.get('/public/copies/:token/download', async (req, reply) => {
     const c = await openCopy(req);
     const format = formatOf(req);
     await ctx.store.update('copies', c._id, { downloads: c.downloads + 1 });

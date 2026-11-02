@@ -14,7 +14,7 @@ export default function Apps() {
   const toast = useToast();
   const { run, busy } = useAction();
   const [params, setParams] = useSearchParams();
-  const { data, error, reload } = useAsync(() => get<{ items: Key[]; domainScopes: { domain: string; label: string; read: string; write: string }[] }>('/api/v1/keys'), []);
+  const { data, error, reload } = useAsync(() => get<{ items: Key[]; domainScopes: { domain: string; label: string; read: string; write: string }[] }>('/api/keys'), []);
   const [showDomains, setShowDomains] = useState(false);
   const [newKey, setNewKey] = useState<{ name: string; scopes: Record<string, boolean>; secret: string | null } | null>(null);
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
@@ -47,14 +47,14 @@ export default function Apps() {
 
   const create = async () => {
     if (!newKey) return;
-    const r = await run(() => post<{ secret: string }>('/api/v1/keys', { name: newKey.name, scopes: Object.keys(newKey.scopes).filter((s) => newKey.scopes[s]) }));
+    const r = await run(() => post<{ secret: string }>('/api/keys', { name: newKey.name, scopes: Object.keys(newKey.scopes).filter((s) => newKey.scopes[s]) }));
     if (r) { setNewKey({ ...newKey, secret: r.secret }); reload(); }
   };
   const revoke = (k: Key) => setConfirm({
     title: `Revoke ${k.name}?`,
     body: k.kind === 'peer' ? 'They will lose access to everything you share. The contact stays in your list.' : 'Anything using this key stops working immediately.',
     cta: 'Revoke',
-    onConfirm: async () => { if (await run(() => del(`/api/v1/keys/${k.id}`), 'Key revoked')) reload(); setConfirm(null); },
+    onConfirm: async () => { if (await run(() => del(`/api/keys/${k.id}`), 'Key revoked')) reload(); setConfirm(null); },
   });
 
   return (
@@ -144,7 +144,7 @@ const ScopeChip = ({ label, on, onClick }: { label: string; on: boolean; onClick
 
 /** Pick an endpoint → Send → see the real response (GET only; writes go through curl with a key). */
 function Explorer() {
-  const [sel, setSel] = useState(ENDPOINTS.findIndex((e) => e.m === 'GET' && e.p === '/api/v1/owner'));
+  const [sel, setSel] = useState(ENDPOINTS.findIndex((e) => e.m === 'GET' && e.p === '/api/owner'));
   const [res, setRes] = useState<{ status: number; ms: number; body: string } | null>(null);
   const ep = ENDPOINTS[sel];
   const sendable = ep.m === 'GET' && !ep.p.includes('{') && ep.auth !== 'peer';
