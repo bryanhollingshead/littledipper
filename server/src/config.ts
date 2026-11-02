@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 function detectHosting(): { provider: 'render' | 'railway' | 'fly' | 'docker' | 'other'; region: string; label: string } {
   const e = process.env;

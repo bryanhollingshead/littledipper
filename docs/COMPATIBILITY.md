@@ -178,7 +178,7 @@ The current code doesn't meet these rules yet in a few places:
 - [x] CI runs a breaking-change check on the catalog, capabilities and routes (`server/compat/contract.json`), plus typecheck and the smoke test.
 - [ ] The check doesn't yet cover request and response fields or error codes: that needs the OpenAPI spec.
 - [ ] No contract tests, cross-release peer test or upgrade test in CI.
-- [ ] No release has been tagged as the compatibility baseline.
+- [x] v0.2.0 is the compatibility baseline: the first published release.
 - [ ] Skins on another origin can't sign in: there's no CORS and no way for a skin to ask the owner for access (question 14).
 - [ ] 28 routes accept only the owner's browser session (security settings, share links, accepting suggestions…), so a skin with an app key can't offer them.
 - [ ] Some data lists still live in the bundled UI (public-profile section titles, category blurbs) instead of the API.
