@@ -13,7 +13,8 @@
     "start": "node dist/server.js",
     "cli": "tsx src/cli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "compat": "tsx scripts/compat.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.3",

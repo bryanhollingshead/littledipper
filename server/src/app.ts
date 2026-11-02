@@ -36,13 +36,18 @@ function staticFile(root: string, urlPath: string): string | null {
 const API_PREFIXES = ['/api/', '/peer/', '/public/', '/.well-known/'];
 const REDIRECT_DAYS = 90;
 
-export async function buildApp() {
+/** onRoute sees every route as it's registered (the compatibility check lists them; see scripts/compat.ts). */
+export async function buildApp(opts: { onRoute?: (method: string, url: string) => void } = {}) {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL || 'info' },
     trustProxy: true,
     bodyLimit: 1024 * 1024,
   });
 
+  if (opts.onRoute) {
+    const seen = opts.onRoute;
+    app.addHook('onRoute', (r) => { for (const m of [r.method].flat()) seen(m, r.url); });
+  }
   await app.register(cookie);
 
   // Old custom domains keep answering with redirects to the canonical address for 90 days.

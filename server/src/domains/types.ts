@@ -32,6 +32,8 @@ export type PartDef = {
   of?: PartDef[];
   /** A date worth a heads-up before it passes (return by, warranty until). Shown on Home, then dropped two weeks after. */
   remind?: boolean;
+  /** Replaced by another part. It keeps working (old records and clients use it), but new UIs shouldn't offer it. Parts are never removed. */
+  deprecated?: boolean;
 };
 
 export type DomainDef = {

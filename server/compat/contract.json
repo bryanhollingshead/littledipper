@@ -1,0 +1,1288 @@
+{
+  "capabilities": [
+    "address-change",
+    "backups.device",
+    "calendar",
+    "calendar.share",
+    "copies",
+    "documents",
+    "documents.share-links",
+    "messages",
+    "parts.datetime",
+    "records",
+    "records.history",
+    "records.provenance",
+    "recovery-kit",
+    "restore"
+  ],
+  "routes": [
+    "DELETE /api/auth/passkeys/{}",
+    "DELETE /api/catalog/{}",
+    "DELETE /api/contacts/{}",
+    "DELETE /api/copies/{}",
+    "DELETE /api/data/{}/{}",
+    "DELETE /api/documents/{}",
+    "DELETE /api/documents/{}/pages/{}",
+    "DELETE /api/documents/{}/shares/{}",
+    "DELETE /api/documents/{}/suggestions/{}",
+    "DELETE /api/federation/links/{}",
+    "DELETE /api/keys/{}",
+    "DELETE /api/owner/fields/{}",
+    "DELETE /api/public-profile/avatar",
+    "GET /.well-known/little-dipper",
+    "GET /api/attention",
+    "GET /api/audit",
+    "GET /api/auth/passkeys",
+    "GET /api/auth/security",
+    "GET /api/big-dipper",
+    "GET /api/calendar",
+    "GET /api/catalog",
+    "GET /api/contacts",
+    "GET /api/contacts/{}",
+    "GET /api/contacts/{}/grants",
+    "GET /api/copies",
+    "GET /api/copies/{}",
+    "GET /api/copies/{}/download",
+    "GET /api/data/{}",
+    "GET /api/data/{}/deleted",
+    "GET /api/data/{}/{}",
+    "GET /api/data/{}/{}/history",
+    "GET /api/documents",
+    "GET /api/documents/kinds",
+    "GET /api/documents/{}",
+    "GET /api/documents/{}/shares",
+    "GET /api/export",
+    "GET /api/export/documents",
+    "GET /api/federation/requests",
+    "GET /api/files/{}",
+    "GET /api/keys",
+    "GET /api/messages/conversations",
+    "GET /api/messages/conversations/{}",
+    "GET /api/messages/unread",
+    "GET /api/node",
+    "GET /api/node/backups",
+    "GET /api/node/backups/{}/download",
+    "GET /api/node/status",
+    "GET /api/owner",
+    "GET /api/owner/fields",
+    "GET /api/public-profile",
+    "GET /api/public-profile/options",
+    "GET /api/timeline",
+    "GET /peer/domains",
+    "GET /peer/domains/{}",
+    "GET /peer/fields",
+    "GET /peer/profile",
+    "GET /public/copies/{}",
+    "GET /public/copies/{}/download",
+    "GET /public/invites/{}",
+    "GET /public/profile",
+    "GET /public/profile/files/{}",
+    "GET /public/shared/{}",
+    "GET /public/shared/{}/files/{}",
+    "PATCH /api/contacts/{}",
+    "PATCH /api/data/{}/{}",
+    "PATCH /api/documents/{}",
+    "PATCH /api/node",
+    "PATCH /api/owner",
+    "POST /api/auth/fallback/disable",
+    "POST /api/auth/logout",
+    "POST /api/auth/passkeys/options",
+    "POST /api/auth/passkeys/register",
+    "POST /api/auth/passkeys/register/options",
+    "POST /api/auth/passkeys/verify",
+    "POST /api/auth/password",
+    "POST /api/auth/recovery",
+    "POST /api/auth/recovery-codes",
+    "POST /api/auth/totp/enable",
+    "POST /api/auth/totp/setup",
+    "POST /api/auth/totp/verify",
+    "POST /api/big-dipper/connect",
+    "POST /api/catalog",
+    "POST /api/contacts",
+    "POST /api/contacts/{}/invite",
+    "POST /api/copies",
+    "POST /api/data/{}",
+    "POST /api/data/{}/{}/history/{}/restore",
+    "POST /api/data/{}/{}/reveal",
+    "POST /api/documents",
+    "POST /api/documents/{}/pages",
+    "POST /api/documents/{}/shares",
+    "POST /api/documents/{}/suggestions",
+    "POST /api/documents/{}/suggestions/{}/accept",
+    "POST /api/federation/invites",
+    "POST /api/federation/links/{}/rotate",
+    "POST /api/federation/lookup",
+    "POST /api/federation/requests",
+    "POST /api/federation/requests/{}/accept",
+    "POST /api/federation/requests/{}/decline",
+    "POST /api/federation/requests/{}/resend",
+    "POST /api/keys",
+    "POST /api/messages/conversations/{}",
+    "POST /api/messages/conversations/{}/read",
+    "POST /api/messages/{}/retry",
+    "POST /api/node/address-change/announce",
+    "POST /api/node/backups",
+    "POST /api/node/backups/{}/restore",
+    "POST /api/node/claim",
+    "POST /api/node/claim/complete",
+    "POST /api/node/claim/restore",
+    "POST /api/node/domain/check",
+    "POST /api/node/recovery-kit",
+    "POST /api/node/reset",
+    "POST /api/node/transfer",
+    "POST /api/node/update",
+    "POST /api/owner",
+    "POST /api/owner/fields",
+    "POST /api/owner/fields/{}/reveal",
+    "POST /peer/address-change",
+    "POST /peer/links/changed",
+    "POST /peer/links/revoke",
+    "POST /peer/links/rotate",
+    "POST /peer/messages",
+    "POST /peer/requests",
+    "POST /peer/requests/{}/accept",
+    "POST /peer/requests/{}/decline",
+    "PUT /api/auth/password",
+    "PUT /api/big-dipper",
+    "PUT /api/contacts/{}/grants",
+    "PUT /api/owner/fields/{}",
+    "PUT /api/public-profile",
+    "PUT /api/public-profile/avatar"
+  ],
+  "domains": {
+    "names": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "legal",
+            "birth",
+            "married",
+            "previous_legal",
+            "alias",
+            "nickname",
+            "professional",
+            "religious"
+          ]
+        },
+        "full": {
+          "type": "text",
+          "required": true
+        },
+        "given": {
+          "type": "text",
+          "required": false
+        },
+        "middle": {
+          "type": "text",
+          "required": false
+        },
+        "family": {
+          "type": "text",
+          "required": false
+        },
+        "suffix": {
+          "type": "text",
+          "required": false
+        },
+        "reason": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "birth",
+            "marriage",
+            "divorce",
+            "court_order",
+            "naturalization",
+            "other"
+          ]
+        }
+      }
+    },
+    "ids": {
+      "dated": false,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "passport",
+            "drivers_license",
+            "state_id",
+            "national_id",
+            "ssn",
+            "tax_id",
+            "visa",
+            "residence_permit",
+            "work_permit",
+            "known_traveler",
+            "military_id",
+            "birth_certificate",
+            "voter_registration",
+            "other"
+          ]
+        },
+        "number": {
+          "type": "text",
+          "required": true
+        },
+        "issuer": {
+          "type": "country",
+          "required": false
+        },
+        "authority": {
+          "type": "text",
+          "required": false
+        },
+        "nameOnDocument": {
+          "type": "text",
+          "required": false
+        },
+        "class": {
+          "type": "text",
+          "required": false
+        },
+        "issued": {
+          "type": "date",
+          "required": false
+        },
+        "expires": {
+          "type": "date",
+          "required": false
+        }
+      }
+    },
+    "citizenship": {
+      "dated": true,
+      "parts": {
+        "country": {
+          "type": "country",
+          "required": true
+        },
+        "status": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "citizen",
+            "national",
+            "permanent_resident",
+            "temporary_resident",
+            "visa_holder",
+            "refugee",
+            "asylee",
+            "other"
+          ]
+        },
+        "acquiredBy": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "birth",
+            "descent",
+            "naturalization",
+            "marriage",
+            "investment",
+            "other"
+          ]
+        }
+      }
+    },
+    "contact_methods": {
+      "dated": false,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "email",
+            "phone",
+            "social",
+            "website",
+            "messaging",
+            "other"
+          ]
+        },
+        "label": {
+          "type": "text",
+          "required": false
+        },
+        "value": {
+          "type": "text",
+          "required": true
+        },
+        "primary": {
+          "type": "boolean",
+          "required": false
+        }
+      }
+    },
+    "residences": {
+      "dated": true,
+      "parts": {
+        "street1": {
+          "type": "text",
+          "required": true
+        },
+        "street2": {
+          "type": "text",
+          "required": false
+        },
+        "city": {
+          "type": "text",
+          "required": true
+        },
+        "region": {
+          "type": "text",
+          "required": false
+        },
+        "postalCode": {
+          "type": "text",
+          "required": false
+        },
+        "country": {
+          "type": "country",
+          "required": true
+        },
+        "ownership": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "own",
+            "rent",
+            "family",
+            "employer",
+            "military",
+            "other"
+          ]
+        },
+        "landlord": {
+          "type": "contact",
+          "required": false
+        },
+        "mailing": {
+          "type": "boolean",
+          "required": false
+        }
+      }
+    },
+    "relationships": {
+      "dated": true,
+      "parts": {
+        "relation": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "spouse",
+            "partner",
+            "ex_spouse",
+            "child",
+            "parent",
+            "sibling",
+            "grandparent",
+            "grandchild",
+            "guardian",
+            "dependent",
+            "emergency_contact",
+            "other"
+          ]
+        },
+        "name": {
+          "type": "text",
+          "required": true
+        },
+        "contact": {
+          "type": "contact",
+          "required": false
+        },
+        "birthDate": {
+          "type": "date",
+          "required": false
+        },
+        "phone": {
+          "type": "phone",
+          "required": false
+        },
+        "email": {
+          "type": "email",
+          "required": false
+        },
+        "emergencyContact": {
+          "type": "boolean",
+          "required": false
+        }
+      }
+    },
+    "pets": {
+      "dated": true,
+      "parts": {
+        "name": {
+          "type": "text",
+          "required": true
+        },
+        "species": {
+          "type": "text",
+          "required": true
+        },
+        "breed": {
+          "type": "text",
+          "required": false
+        },
+        "birthDate": {
+          "type": "date",
+          "required": false
+        },
+        "microchip": {
+          "type": "text",
+          "required": false
+        },
+        "vet": {
+          "type": "contact",
+          "required": false
+        }
+      }
+    },
+    "travel": {
+      "dated": true,
+      "parts": {
+        "country": {
+          "type": "country",
+          "required": true
+        },
+        "city": {
+          "type": "text",
+          "required": false
+        },
+        "purpose": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "leisure",
+            "business",
+            "family",
+            "study",
+            "medical",
+            "transit",
+            "other"
+          ]
+        }
+      }
+    },
+    "events": {
+      "dated": false,
+      "parts": {
+        "title": {
+          "type": "text",
+          "required": true
+        },
+        "start": {
+          "type": "datetime",
+          "required": true
+        },
+        "end": {
+          "type": "datetime",
+          "required": false
+        },
+        "allDay": {
+          "type": "boolean",
+          "required": false
+        },
+        "location": {
+          "type": "text",
+          "required": false
+        },
+        "repeat": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "daily",
+            "weekly",
+            "monthly",
+            "yearly"
+          ]
+        },
+        "repeatUntil": {
+          "type": "date",
+          "required": false
+        }
+      }
+    },
+    "life_events": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "birth",
+            "move",
+            "relationship",
+            "marriage",
+            "divorce",
+            "child",
+            "education",
+            "career",
+            "health",
+            "loss",
+            "achievement",
+            "travel",
+            "other"
+          ]
+        },
+        "title": {
+          "type": "text",
+          "required": true
+        },
+        "description": {
+          "type": "longtext",
+          "required": false
+        },
+        "place": {
+          "type": "text",
+          "required": false
+        }
+      }
+    },
+    "employment": {
+      "dated": true,
+      "parts": {
+        "employer": {
+          "type": "text",
+          "required": true
+        },
+        "title": {
+          "type": "text",
+          "required": true
+        },
+        "department": {
+          "type": "text",
+          "required": false
+        },
+        "type": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "full_time",
+            "part_time",
+            "contract",
+            "self_employed",
+            "internship",
+            "volunteer",
+            "seasonal",
+            "other"
+          ]
+        },
+        "remote": {
+          "type": "boolean",
+          "required": false
+        },
+        "city": {
+          "type": "text",
+          "required": false
+        },
+        "country": {
+          "type": "country",
+          "required": false
+        },
+        "workAddress": {
+          "type": "text",
+          "required": false
+        },
+        "employerPhone": {
+          "type": "phone",
+          "required": false
+        },
+        "supervisor": {
+          "type": "text",
+          "required": false
+        },
+        "supervisorContact": {
+          "type": "contact",
+          "required": false
+        },
+        "mayContact": {
+          "type": "boolean",
+          "required": false
+        },
+        "employeeId": {
+          "type": "text",
+          "required": false
+        },
+        "startingPay": {
+          "type": "money",
+          "required": false
+        },
+        "currentPay": {
+          "type": "money",
+          "required": false
+        },
+        "reasonForLeaving": {
+          "type": "text",
+          "required": false
+        },
+        "description": {
+          "type": "longtext",
+          "required": false
+        }
+      }
+    },
+    "education": {
+      "dated": true,
+      "parts": {
+        "institution": {
+          "type": "text",
+          "required": true
+        },
+        "level": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "high_school",
+            "vocational",
+            "associate",
+            "bachelor",
+            "master",
+            "doctorate",
+            "professional",
+            "certificate",
+            "other"
+          ]
+        },
+        "degree": {
+          "type": "text",
+          "required": false
+        },
+        "field": {
+          "type": "text",
+          "required": false
+        },
+        "completed": {
+          "type": "boolean",
+          "required": false
+        },
+        "gpa": {
+          "type": "text",
+          "required": false
+        },
+        "honors": {
+          "type": "text",
+          "required": false
+        },
+        "city": {
+          "type": "text",
+          "required": false
+        },
+        "country": {
+          "type": "country",
+          "required": false
+        },
+        "studentId": {
+          "type": "text",
+          "required": false
+        }
+      }
+    },
+    "credentials": {
+      "dated": false,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "license",
+            "certification",
+            "clearance",
+            "other"
+          ]
+        },
+        "name": {
+          "type": "text",
+          "required": true
+        },
+        "issuer": {
+          "type": "text",
+          "required": true
+        },
+        "number": {
+          "type": "text",
+          "required": false
+        },
+        "region": {
+          "type": "text",
+          "required": false
+        },
+        "issued": {
+          "type": "date",
+          "required": false
+        },
+        "expires": {
+          "type": "date",
+          "required": false
+        },
+        "url": {
+          "type": "url",
+          "required": false
+        }
+      }
+    },
+    "military": {
+      "dated": true,
+      "parts": {
+        "country": {
+          "type": "country",
+          "required": true
+        },
+        "branch": {
+          "type": "text",
+          "required": true
+        },
+        "rank": {
+          "type": "text",
+          "required": false
+        },
+        "serviceNumber": {
+          "type": "text",
+          "required": false
+        },
+        "discharge": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "honorable",
+            "general",
+            "other_than_honorable",
+            "medical",
+            "still_serving",
+            "other"
+          ]
+        }
+      }
+    },
+    "health": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "allergy",
+            "condition",
+            "medication",
+            "immunization",
+            "procedure",
+            "blood_type",
+            "measurement",
+            "directive",
+            "organ_donor",
+            "other"
+          ]
+        },
+        "name": {
+          "type": "text",
+          "required": true
+        },
+        "detail": {
+          "type": "longtext",
+          "required": false
+        },
+        "provider": {
+          "type": "contact",
+          "required": false
+        }
+      }
+    },
+    "insurance": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "health",
+            "dental",
+            "vision",
+            "auto",
+            "home",
+            "renters",
+            "life",
+            "disability",
+            "travel",
+            "pet",
+            "umbrella",
+            "business",
+            "other"
+          ]
+        },
+        "provider": {
+          "type": "text",
+          "required": true
+        },
+        "policyNumber": {
+          "type": "text",
+          "required": false
+        },
+        "memberId": {
+          "type": "text",
+          "required": false
+        },
+        "groupNumber": {
+          "type": "text",
+          "required": false
+        },
+        "premium": {
+          "type": "money",
+          "required": false
+        },
+        "coverage": {
+          "type": "text",
+          "required": false
+        },
+        "phone": {
+          "type": "phone",
+          "required": false
+        },
+        "agent": {
+          "type": "contact",
+          "required": false
+        }
+      }
+    },
+    "financial_accounts": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "checking",
+            "savings",
+            "credit_card",
+            "debit_card",
+            "brokerage",
+            "retirement",
+            "hsa",
+            "loan",
+            "mortgage",
+            "crypto",
+            "other"
+          ]
+        },
+        "institution": {
+          "type": "text",
+          "required": true
+        },
+        "nickname": {
+          "type": "text",
+          "required": false
+        },
+        "last4": {
+          "type": "last4",
+          "required": false
+        },
+        "balance": {
+          "type": "money",
+          "required": false
+        },
+        "jointWith": {
+          "type": "text",
+          "required": false
+        }
+      }
+    },
+    "income": {
+      "dated": true,
+      "parts": {
+        "source": {
+          "type": "text",
+          "required": true
+        },
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "salary",
+            "self_employment",
+            "investment",
+            "rental",
+            "pension",
+            "benefits",
+            "other"
+          ]
+        },
+        "amount": {
+          "type": "money",
+          "required": true
+        }
+      }
+    },
+    "tax_returns": {
+      "dated": false,
+      "parts": {
+        "year": {
+          "type": "number",
+          "required": true
+        },
+        "jurisdiction": {
+          "type": "text",
+          "required": true
+        },
+        "filingStatus": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "single",
+            "married_joint",
+            "married_separate",
+            "head_of_household",
+            "widow",
+            "other"
+          ]
+        },
+        "agi": {
+          "type": "money",
+          "required": false
+        },
+        "taxPaid": {
+          "type": "money",
+          "required": false
+        },
+        "refund": {
+          "type": "money",
+          "required": false
+        },
+        "preparer": {
+          "type": "contact",
+          "required": false
+        }
+      }
+    },
+    "vehicles": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "car",
+            "motorcycle",
+            "truck",
+            "rv",
+            "boat",
+            "bicycle",
+            "other"
+          ]
+        },
+        "make": {
+          "type": "text",
+          "required": true
+        },
+        "model": {
+          "type": "text",
+          "required": true
+        },
+        "year": {
+          "type": "number",
+          "required": false
+        },
+        "color": {
+          "type": "text",
+          "required": false
+        },
+        "vin": {
+          "type": "text",
+          "required": false
+        },
+        "plate": {
+          "type": "text",
+          "required": false
+        },
+        "plateRegion": {
+          "type": "text",
+          "required": false
+        },
+        "registrationExpires": {
+          "type": "date",
+          "required": false
+        }
+      }
+    },
+    "property": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "home",
+            "land",
+            "electronics",
+            "jewelry",
+            "art",
+            "instrument",
+            "collectible",
+            "other"
+          ]
+        },
+        "name": {
+          "type": "text",
+          "required": true
+        },
+        "location": {
+          "type": "text",
+          "required": false
+        },
+        "serialNumber": {
+          "type": "text",
+          "required": false
+        },
+        "purchasePrice": {
+          "type": "money",
+          "required": false
+        },
+        "estimatedValue": {
+          "type": "money",
+          "required": false
+        }
+      }
+    },
+    "memberships": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "frequent_flyer",
+            "hotel",
+            "loyalty",
+            "club",
+            "association",
+            "union",
+            "subscription",
+            "other"
+          ]
+        },
+        "organization": {
+          "type": "text",
+          "required": true
+        },
+        "memberNumber": {
+          "type": "text",
+          "required": false
+        },
+        "tier": {
+          "type": "text",
+          "required": false
+        },
+        "cost": {
+          "type": "money",
+          "required": false
+        }
+      }
+    },
+    "online_accounts": {
+      "dated": true,
+      "parts": {
+        "service": {
+          "type": "text",
+          "required": true
+        },
+        "username": {
+          "type": "text",
+          "required": false
+        },
+        "url": {
+          "type": "url",
+          "required": false
+        },
+        "twoFactor": {
+          "type": "boolean",
+          "required": false
+        },
+        "recoveryHint": {
+          "type": "text",
+          "required": false
+        }
+      }
+    },
+    "legal": {
+      "dated": true,
+      "parts": {
+        "kind": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "will",
+            "power_of_attorney",
+            "healthcare_proxy",
+            "trust",
+            "beneficiary",
+            "prenup",
+            "court_order",
+            "deed",
+            "other"
+          ]
+        },
+        "title": {
+          "type": "text",
+          "required": true
+        },
+        "attorney": {
+          "type": "contact",
+          "required": false
+        },
+        "originalLocation": {
+          "type": "text",
+          "required": false
+        },
+        "parties": {
+          "type": "longtext",
+          "required": false
+        }
+      }
+    },
+    "receipts": {
+      "dated": false,
+      "parts": {
+        "merchant": {
+          "type": "text",
+          "required": false
+        },
+        "purchased": {
+          "type": "date",
+          "required": false
+        },
+        "total": {
+          "type": "money",
+          "required": false
+        },
+        "category": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "groceries",
+            "dining",
+            "household",
+            "clothing",
+            "electronics",
+            "health",
+            "transport",
+            "travel",
+            "home",
+            "entertainment",
+            "subscriptions",
+            "gifts",
+            "education",
+            "business",
+            "charity",
+            "other"
+          ]
+        },
+        "items": {
+          "type": "list",
+          "required": false,
+          "of": {
+            "description": {
+              "type": "text",
+              "required": true
+            },
+            "quantity": {
+              "type": "number",
+              "required": false
+            },
+            "price": {
+              "type": "money",
+              "required": false
+            },
+            "sku": {
+              "type": "text",
+              "required": false
+            }
+          }
+        },
+        "subtotal": {
+          "type": "money",
+          "required": false
+        },
+        "tax": {
+          "type": "money",
+          "required": false
+        },
+        "paymentMethod": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "card",
+            "cash",
+            "bank_transfer",
+            "mobile_wallet",
+            "crypto",
+            "gift_card",
+            "other"
+          ]
+        },
+        "cardLast4": {
+          "type": "last4",
+          "required": false
+        },
+        "orderNumber": {
+          "type": "text",
+          "required": false
+        },
+        "returnBy": {
+          "type": "date",
+          "required": false
+        },
+        "warrantyUntil": {
+          "type": "date",
+          "required": false
+        },
+        "merchantUrl": {
+          "type": "url",
+          "required": false
+        },
+        "capturedVia": {
+          "type": "enum",
+          "required": false,
+          "options": [
+            "manual",
+            "upload",
+            "email",
+            "assistant",
+            "merchant"
+          ]
+        }
+      }
+    },
+    "preferences": {
+      "dated": false,
+      "parts": {
+        "category": {
+          "type": "enum",
+          "required": true,
+          "options": [
+            "clothing",
+            "food",
+            "drink",
+            "gifts",
+            "travel",
+            "communication",
+            "accessibility",
+            "entertainment",
+            "work",
+            "other"
+          ]
+        },
+        "name": {
+          "type": "text",
+          "required": true
+        },
+        "value": {
+          "type": "text",
+          "required": true
+        }
+      }
+    }
+  }
+}

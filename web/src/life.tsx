@@ -5,7 +5,7 @@ import { DocTiles } from './docs';
 import { Confirm, Pills, Toggle, useAction, type ConfirmCfg } from './ui';
 
 // ── types ──────────────────────────────────────────────────────────────
-export type Part = { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean };
+export type Part = { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean; deprecated?: boolean };
 /** One entry in a record's history: the record as it stood after a change (before it, for a delete). */
 export type Version = { version: string; action: 'create' | 'update' | 'delete' | 'restore'; at: string; byLabel: string; record: Rec };
 /** "You" reads as "you" mid-sentence; an app's name stays as it is. */
@@ -367,8 +367,10 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
   }, [onClose, confirm]);
 
   const tKeys = titleKeys(d);
-  const essential = d.parts.filter((p, i) => p.required || tKeys.includes(p.key) || i < 4);
-  const extra = d.parts.filter((p) => !essential.includes(p));
+  // Deprecated parts stay editable on records that already use them, but aren't offered otherwise.
+  const offered = d.parts.filter((p) => !p.deprecated || (vals[p.key] !== undefined && vals[p.key] !== '') || rec?.masked.includes(p.key));
+  const essential = offered.filter((p, i) => p.required || tKeys.includes(p.key) || i < 4);
+  const extra = offered.filter((p) => !essential.includes(p));
   const extraFilled = extra.some((p) => vals[p.key] !== undefined && vals[p.key] !== '' || rec?.masked.includes(p.key));
 
   // Line-item prices follow the currency of the first amount entered (a receipt's total).

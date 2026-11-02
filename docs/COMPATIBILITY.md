@@ -45,6 +45,25 @@ Clients never compare version strings to decide what a node can do. The `version
 
 To change something, add the new thing next to the old one and keep both working.
 
+### The catalog evolves the same way
+
+The built-in domains in `server/src/domains/catalog.ts` are a contract too: records on every node were saved against them, and apps and peers read them.
+
+| Allowed | Forbidden |
+|---|---|
+| A new domain | Removing a domain, or changing whether it's `dated` |
+| A new **optional** part | A new **required** part on an existing domain (old records don't have it) |
+| A new enum option | Removing an enum option (records may hold it) |
+| New label, hint or description wording | Removing or renaming a part, including a sub-part of a list |
+| Marking a part `deprecated: true` | Changing a part's type |
+| | Making a part required, or no longer required |
+
+To replace a part, add the new one next to it and mark the old one `deprecated: true`. The old part keeps working; new screens stop offering it.
+
+### How it's enforced
+
+`server/compat/contract.json` records the capabilities, every route and the catalog. `npm run compat -w server` builds the same from the code and fails on anything above that's forbidden, naming the domain and part. CI runs it on every push and pull request against the contract in the commit being built on, so editing the file can't hide a removal. After adding something, run `npm run compat -w server -- --update` and commit the new contract with the change.
+
 ## III. Ignore what you don't understand.
 
 - **Clients and peers** must ignore unknown fields in responses. That rule is what makes adding fields safe.
@@ -156,7 +175,9 @@ The current code doesn't meet these rules yet in a few places:
 - [ ] No OpenAPI spec exists yet.
 - [ ] Routes have no Fastify request or response schemas, so there's nothing to diff or validate against.
 - [ ] Unknown request fields: current behavior is unverified.
-- [ ] No breaking-change check, contract tests, cross-release peer test or upgrade test in CI.
+- [x] CI runs a breaking-change check on the catalog, capabilities and routes (`server/compat/contract.json`), plus typecheck and the smoke test.
+- [ ] The check doesn't yet cover request and response fields or error codes: that needs the OpenAPI spec.
+- [ ] No contract tests, cross-release peer test or upgrade test in CI.
 - [ ] No release has been tagged as the compatibility baseline.
 - [ ] Skins on another origin can't sign in: there's no CORS and no way for a skin to ask the owner for access (question 14).
 - [ ] 28 routes accept only the owner's browser session (security settings, share links, accepting suggestions…), so a skin with an app key can't offer them.
