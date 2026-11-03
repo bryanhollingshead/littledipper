@@ -8,8 +8,11 @@ import RestoreFromBackup from './Restore';
 type Status = { claimed: boolean; version: string; address: string; hosting: { label: string; region: string }; storage: string };
 type HostTab = 'railway' | 'render' | 'docker' | 'vps' | 'home';
 
+/** Where the one-click setup starts. It holds the claim code it made, in the owner's browser. */
+const BIG_DIPPER = import.meta.env.VITE_BIG_DIPPER_URL || 'https://bigdipper.onrender.com';
+
 const HOST: Record<HostTab, { label: string; text: string; cmd: string; out: (a: string) => string; note: string }> = {
-  railway: { label: 'Railway', text: 'Your claim code was made when you deployed. Only someone signed in to your Railway account can see it, so it proves the server is yours. It works until you claim.', cmd: 'Railway → your Little Dipper → Variables → LD_CLAIM_TOKEN', out: () => 'Copy the value (click the eye to reveal it) and paste it below', note: 'Started from Big Dipper? Its page has the same code and can bring you straight here.' },
+  railway: { label: 'Railway', text: 'Your claim code was made when you deployed. Only someone signed in to your Railway account can see it, so it proves the server is yours. It works until you claim.', cmd: 'Railway → your Little Dipper → Variables → LD_CLAIM_TOKEN', out: () => 'Copy the value (click the eye to reveal it) and paste it below', note: 'Started from Big Dipper in another browser? Use this code instead.' },
   render: { label: 'Render / one-click', text: 'The install button opened your claim link automatically. If you closed that tab, the link is also in your service logs from the first boot.', cmd: 'Render → your service → Logs', out: (a) => `Claim this node: https://${a}/claim?token=ct_…`, note: 'Expired? Open the Render Shell and run: little-dipper claim-link' },
   docker: { label: 'Docker', text: 'The link prints to the container logs on first boot. Anyone who can read those logs controls the server, so it proves you deployed it.', cmd: '$ docker logs little-dipper | grep claim', out: (a) => `Claim this node: https://${a}/claim?token=ct_…`, note: 'Expired? Run: docker exec little-dipper little-dipper claim-link' },
   vps: { label: 'Server / VPS', text: 'Run the CLI on the machine. It prints a fresh link, valid for 1 hour, and invalidates any earlier one.', cmd: '$ sudo little-dipper claim-link', out: (a) => `https://${a}/claim?token=ct_…  (expires in 60 min)`, note: 'Headless box without a browser? Add --qr to print a QR code you can scan with your phone.' },
@@ -137,7 +140,7 @@ export default function Setup() {
   };
 
   const pk = {
-    idle: ['var(--color-neutral-300)', 'No passkey yet', 'Your browser will ask to use Face ID, Touch ID, Windows Hello or a security key.'],
+    idle: ['var(--color-neutral-300)', 'No passkey yet', 'Your browser will ask for your face, fingerprint, device PIN or a security key.'],
     pending: ['var(--color-accent)', 'Waiting for your device…', 'Confirm on your device.'],
     done: ['var(--color-accent-2)', 'Passkey created', 'Saved to “This device”. Add more devices later in Settings.'],
   }[passkey];
@@ -170,7 +173,11 @@ export default function Setup() {
           <>
             <span className="tag tag-accent">Not set up yet</span>
             <h1 style={{ marginTop: 14, fontSize: 44, textWrap: 'pretty' }}>This Little Dipper is waiting for its owner.</h1>
-            <p style={{ fontSize: 17, maxWidth: 540, textWrap: 'pretty' }}>To claim it, you need the claim code (or claim link) made when it was set up. Only the person who set it up can see it. Where to find it depends on where it runs:</p>
+            <div className="card" style={{ padding: '20px 24px', gap: 10, marginTop: 20 }}>
+              <div style={{ fontSize: 15 }}><strong>Set it up from Big Dipper?</strong> Big Dipper kept your claim code in that browser and will bring you straight back.</div>
+              <div><a className="btn btn-primary" href={`${BIG_DIPPER}/continue?node=${encodeURIComponent(window.location.origin)}`} style={{ fontSize: 16, padding: '12px 26px' }}>Finish setting up</a></div>
+            </div>
+            <p style={{ fontSize: 17, maxWidth: 540, textWrap: 'pretty', marginTop: 28 }}>Otherwise, you need the claim code (or claim link) made when it was set up. Only the person who set it up can see it. Where to find it depends on where it runs:</p>
             <Pills value={hostTab} onChange={setHostTab} options={Object.entries(HOST).map(([k, h]) => [k as HostTab, h.label])} style={{ margin: '24px 0 14px' }} />
             <div className="card" style={{ padding: '20px 24px', gap: 12 }}>
               <div style={{ fontSize: 14 }}>{host.text}</div>
