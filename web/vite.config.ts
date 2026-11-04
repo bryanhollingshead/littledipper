@@ -3,7 +3,8 @@ import react from '@vitejs/plugin-react';
 
 // In development the API runs on :4000; the browser talks to Vite on :5173.
 const api = process.env.LD_API || 'http://localhost:4000';
-const proxy = Object.fromEntries(['/api', '/peer', '/public', '/.well-known'].map((p) => [p, { target: api, changeOrigin: false }]));
+// /oauth/authorize is a page here; only the OAuth endpoints the server answers are proxied.
+const proxy = Object.fromEntries(['/api', '/peer', '/public', '/.well-known', '/oauth/token', '/oauth/register'].map((p) => [p, { target: api, changeOrigin: false }]));
 
 export default defineConfig({
   plugins: [react()],

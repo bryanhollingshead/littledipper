@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { addr, get, post } from '../api';
 import { Brand, Circle, useToast } from '../ui';
@@ -7,6 +7,10 @@ import { Brand, Circle, useToast } from '../ui';
 export default function Login() {
   const nav = useNavigate();
   const toast = useToast();
+  // Where to go after signing in: a path on this site only (the consent page sends people here and back).
+  const [params] = useSearchParams();
+  const raw = params.get('next') || '';
+  const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/admin';
   const [status, setStatus] = useState<{ address: string; claimed: boolean } | null>(null);
   const [brand, setBrand] = useState('Little Dipper');
   const [mode, setMode] = useState<'passkey' | 'pw' | 'recovery'>('passkey');
@@ -17,10 +21,10 @@ export default function Login() {
   useEffect(() => {
     get('/api/node/status').then((s) => (s.claimed ? setStatus(s) : nav('/', { replace: true })));
     get('/.well-known/little-dipper').then((d) => d.displayName && setBrand(d.displayName)).catch(() => {});
-    get('/api/owner').then(() => nav('/admin', { replace: true })).catch(() => {});
-  }, [nav]);
+    get('/api/owner').then(() => nav(next, { replace: true })).catch(() => {});
+  }, [nav, next]);
 
-  const done = () => nav('/admin', { replace: true });
+  const done = () => nav(next, { replace: true });
 
   const passkey = async () => {
     setPending(true);

@@ -10,6 +10,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { bearer, findKey } from '../auth.js';
 import { VERSION } from '../config.js';
 import { MAX_FILE_BYTES } from '../files.js';
+import { canonicalUrl, getNode } from '../node.js';
 
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_BATCH = 50;
@@ -262,11 +263,21 @@ async function handle(msg: RpcMessage, call: Call) {
   }
 }
 
+function cors(reply: FastifyReply) {
+  reply.header('access-control-allow-origin', '*');
+  reply.header('access-control-allow-headers', 'authorization, content-type, mcp-protocol-version, accept');
+  reply.header('access-control-allow-methods', 'POST, OPTIONS');
+  reply.header('access-control-expose-headers', 'www-authenticate');
+}
+
 export default async function mcpRoutes(app: FastifyInstance) {
   app.post('/api/mcp', { bodyLimit: Math.ceil(MAX_FILE_BYTES * 1.4) + 64 * 1024 }, async (req: FastifyRequest, reply: FastifyReply) => {
+    cors(reply);
     const token = bearer(req);
     if (!(await findKey(token, ['app']))) {
-      return reply.code(401).header('www-authenticate', 'Bearer').send({ code: 'unauthenticated', message: 'Connect with an app key from Little Dipper (Apps and access).' });
+      // Tells an assistant platform where to start OAuth (RFC 9728).
+      const meta = `${canonicalUrl(await getNode())}/.well-known/oauth-protected-resource`;
+      return reply.code(401).header('www-authenticate', `Bearer resource_metadata="${meta}"`).send({ code: 'unauthenticated', message: 'Connect from your assistant, or with an app key from Little Dipper (Apps and access).' });
     }
     // Every tool runs as a request to this node's own API, carrying the assistant's key and nothing else.
     const call: Call = async (method, url, body, contentType) => {
@@ -292,6 +303,9 @@ export default async function mcpRoutes(app: FastifyInstance) {
     if (!out.length) return reply.code(202).send();
     return reply.type('application/json').send(Array.isArray(body) ? out : out[0]);
   });
+
+  // Assistants in a browser can call it: it takes a Bearer token, never a cookie.
+  app.options('/api/mcp', async (_req, reply) => { cors(reply); return reply.code(204).send(); });
 
   // Stateless server: no server-to-client stream and no sessions to end.
   app.get('/api/mcp', async (_req, reply) => reply.code(405).header('allow', 'POST').send({ code: 'method_not_allowed', message: 'POST JSON-RPC messages to this endpoint.' }));

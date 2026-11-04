@@ -123,6 +123,7 @@ The capability list never describes the owner's data: not which domains hold rec
 | `restore` | A fresh node can be restored from a kit and a backup at `POST /api/node/claim/restore` |
 | `mcp` | An MCP server (Streamable HTTP, stateless) at the descriptor's `mcp` address, for AI assistants using an app key |
 | `assistants` | App keys can carry an assistant mode (answer, suggest, make) and readable secret fields; suggested changes wait at `/api/reviews` for the owner; an app's changes can be undone by session or one at a time, never over a later edit |
+| `oauth` | OAuth 2.0 for assistant platforms: discovery at `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`, dynamic registration, authorization code with PKCE (S256), 30-minute opaque access tokens and rotating refresh tokens |
 
 The list lives in `CAPABILITIES` in `server/src/node.ts`.
 

@@ -12,6 +12,7 @@ import contactRoutes from './routes/contacts.js';
 import peerRoutes from './routes/peer.js';
 import miscRoutes from './routes/misc.js';
 import mcpRoutes from './routes/mcp.js';
+import oauthRoutes from './routes/oauth.js';
 import domainRoutes from './routes/domains.js';
 import messageRoutes from './routes/messages.js';
 import documentRoutes from './routes/documents.js';
@@ -84,6 +85,7 @@ export async function buildApp(opts: { onRoute?: (method: string, url: string) =
   await app.register(calendarRoutes);
   await app.register(domainRoutes);
   await app.register(mcpRoutes);
+  await app.register(oauthRoutes);
 
   // The React app: built files from web/dist; every other non-API GET gets index.html.
   const root = config.webDist;

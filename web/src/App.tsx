@@ -3,6 +3,7 @@ import { get } from './api';
 import { ToastProvider, useAsync, Loading } from './ui';
 import Setup from './pages/Setup';
 import Login from './pages/Login';
+import Authorize from './pages/Authorize';
 import PublicProfile from './pages/PublicProfile';
 import Connect from './pages/Connect';
 import AdminLayout from './pages/admin/Layout';
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="/" element={<Root />} />
           <Route path="/claim" element={<Setup />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/oauth/authorize" element={<Authorize />} />
           <Route path="/connect" element={<Connect />} />
           <Route path="/s/:token" element={<SharedDocument />} />
           <Route path="/c/:token" element={<SharedCopy />} />

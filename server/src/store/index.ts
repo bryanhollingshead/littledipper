@@ -11,7 +11,7 @@ export const COLLECTIONS = [
   'nodes', 'owners', 'fields', 'contacts', 'nodeLinks', 'grants',
   'connectionRequests', 'invites', 'apiKeys', 'publicProfile', 'audit', 'challenges', 'backups',
   'records', 'domainDefs', 'messages', 'files', 'documents', 'shares', 'copies', 'recordVersions',
-  'reviews',
+  'reviews', 'oauthClients', 'oauthCodes', 'oauthTokens',
 ] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
@@ -117,6 +117,9 @@ const SQLITE_INDEXES: [Collection, string[]][] = [
   ['recordVersions', ['recordId']],
   ['recordVersions', ['domain', 'action']],
   ['reviews', ['status']],
+  ['oauthCodes', ['hash']],
+  ['oauthTokens', ['hash']],
+  ['oauthTokens', ['keyId']],
 ];
 
 class SqliteStore implements Store {

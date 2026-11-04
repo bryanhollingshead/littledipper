@@ -26,6 +26,8 @@ export type ApiKeyDoc = Doc & {
   label?: string;
   /** Set on an app key that an AI assistant uses: what it may change, and which secret fields it may read. */
   assistant?: AssistantSettings;
+  /** Set when the key is an OAuth connection: the registered client it belongs to. Its own secret is never handed out. */
+  oauth?: { clientId: string };
 };
 
 /**
@@ -69,7 +71,12 @@ export async function issueKey(opts: { kind: ApiKeyDoc['kind']; name: string; sc
 
 export async function findKey(secret: string | undefined, kinds: ApiKeyDoc['kind'][]): Promise<ApiKeyDoc | null> {
   if (!secret) return null;
-  const k = await ctx.store.findOne<ApiKeyDoc>('apiKeys', { hash: sha256(secret) });
+  let k = await ctx.store.findOne<ApiKeyDoc>('apiKeys', { hash: sha256(secret) });
+  // An OAuth access token stands for its connection's key: checked here on every call, so disconnecting is immediate.
+  if (!k && kinds.includes('app') && secret.startsWith('ldo_at_')) {
+    const t = await ctx.store.findOne<{ _id: string; keyId: string; kind: string; expiresAt: string }>('oauthTokens', { hash: sha256(secret) });
+    if (t && t.kind === 'access' && Date.parse(t.expiresAt) > Date.now()) k = await ctx.store.get<ApiKeyDoc>('apiKeys', t.keyId);
+  }
   if (!k || k.revokedAt || !kinds.includes(k.kind)) return null;
   if (k.expiresAt && new Date(k.expiresAt).getTime() < Date.now()) return null;
   // Throttle lastUsedAt writes to once a minute.
