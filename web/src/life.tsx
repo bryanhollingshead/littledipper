@@ -2,12 +2,12 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { del, FILE_ACCEPT, get, longDate, patch, post, uploadDocument, type DocRef, type Sensitivity } from './api';
 import { DocTiles } from './docs';
-import { Confirm, Pills, Toggle, useAction, type ConfirmCfg } from './ui';
+import { Confirm, Pills, Toggle, useAction, useToast, type ConfirmCfg } from './ui';
 
 // ── types ──────────────────────────────────────────────────────────────
 export type Part = { key: string; label: string; type: string; required?: boolean; sensitivity: Sensitivity; options?: [string, string][]; hint?: string; of?: Part[]; remind?: boolean; deprecated?: boolean };
 /** One entry in a record's history: the record as it stood after a change (before it, for a delete). */
-export type Version = { version: string; action: 'create' | 'update' | 'delete' | 'restore'; at: string; byLabel: string; record: Rec };
+export type Version = { version: string; action: 'create' | 'update' | 'delete' | 'restore'; at: string; by: { type: string; id: string }; byLabel: string; record: Rec };
 /** "You" reads as "you" mid-sentence; an app's name stays as it is. */
 export const byWhom = (label: string) => (label === 'You' ? 'you' : label);
 
@@ -22,6 +22,8 @@ export type Rec = {
   current: boolean; notes: string; createdAt: string; updatedAt: string;
   /** Who made the latest change, as the server names them: "You", an app's name, "Import"… */
   updatedByLabel?: string;
+  /** Who added it, named the same way. */
+  sourceLabel?: string;
   documents?: DocRef[];
 };
 export type ContactLite = { id: string; displayName: string };
@@ -234,6 +236,7 @@ function changedParts(d: Domain, now: Rec, before: Rec | undefined) {
 
 function RecordChanges({ d, rec, onRestored }: { d: Domain; rec: Rec; onRestored: (saved?: Rec) => void }) {
   const { run } = useAction();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Version[] | null>(null);
   const toggle = async () => {
@@ -243,6 +246,13 @@ function RecordChanges({ d, rec, onRestored }: { d: Domain; rec: Rec; onRestored
   const restore = async (v: Version) => {
     const saved = await run(() => post<Rec>(`/api/data/${d.id}/${rec.id}/history/${v.version}/restore`));
     if (saved) onRestored(saved);
+  };
+  /** An app's change: put back just the fields it changed, never over a later edit. */
+  const undo = async (v: Version) => {
+    const r = await run(() => post<{ outcome: string; reverted: string[]; skipped: string[]; reason?: string }>(`/api/data/${d.id}/${rec.id}/history/${v.version}/undo`));
+    if (!r) return;
+    toast(r.outcome === 'removed' ? 'Removed' : r.outcome === 'reverted' ? `Undone${r.skipped.length ? `. Kept your later change to ${r.skipped.join(', ')}` : ''}` : r.reason ?? 'Nothing to undo');
+    if (r.outcome === 'reverted' || r.outcome === 'removed') onRestored();
   };
   return (
     <div style={{ display: 'grid', gap: 8 }}>
@@ -255,6 +265,7 @@ function RecordChanges({ d, rec, onRestored }: { d: Domain; rec: Rec; onRestored
               <div>{ACTION[v.action]}{what.length ? `: ${what.join(', ')}` : ''}</div>
               <div className="text-muted" style={{ fontSize: 12 }}>By {byWhom(v.byLabel)} · {new Date(v.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</div>
             </div>
+            {v.by.type === 'app' && (v.action === 'update' || v.action === 'create') && <button type="button" className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => undo(v)}>Undo this change</button>}
             {i > 0 && <button type="button" className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => restore(v)}>Restore this version</button>}
           </div>
         );
@@ -482,7 +493,11 @@ export function RecordEditor({ d, rec, contacts, onClose, onSaved, defaults }: {
             </>
           )}
           <div className="field"><label htmlFor="notes">Notes</label><textarea id="notes" className="input" style={{ borderRadius: 20, minHeight: 70 }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering" /></div>
-          {rec?.updatedByLabel && <div className="text-muted" style={{ fontSize: 12 }}>Last changed by {byWhom(rec.updatedByLabel)} · {longDate(rec.updatedAt)}</div>}
+          {rec?.updatedByLabel && (
+            <div className="text-muted" style={{ fontSize: 12 }}>
+              {rec.sourceLabel && rec.sourceLabel !== 'You' && `Added by ${rec.sourceLabel} · `}Last changed by {byWhom(rec.updatedByLabel)} · {longDate(rec.updatedAt)}
+            </div>
+          )}
           {rec && <RecordChanges d={d} rec={rec} onRestored={onSaved} />}
           {error && <div style={{ color: 'var(--color-accent-700)', fontSize: 13 }}>{error}</div>}
           <button type="submit" hidden />

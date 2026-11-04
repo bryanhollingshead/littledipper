@@ -7,8 +7,9 @@ const MODE_TEXT: Record<AssistantMode, string> = { answer: 'answer questions onl
 import { allFields, plainValue } from '../fields.js';
 import { canonicalUrl, getNode } from '../node.js';
 import { sendSigned, tokenHash, type ContactDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc } from '../federation.js';
-import { endLink } from '../contacts.js';
-import { listDomains } from '../domains/records.js';
+import { contactsSharing, endLink, nudgePeers } from '../contacts.js';
+import { listDomains, recordOut, versionRecord } from '../domains/records.js';
+import { appVersions, sessionsOf, undoChanges } from '../undo.js';
 import { getOwner } from '../owner.js';
 import { checkSections, publicFields, publicView, sectionsOf } from '../publicProfile.js';
 import type { AuditDoc } from '../audit.js';
@@ -154,6 +155,50 @@ export default async function miscRoutes(app: FastifyInstance) {
     await ctx.store.update('apiKeys', k._id, { revokedAt: new Date().toISOString() });
     await audit({ actor: ownerActor(p.key._id), action: 'key.revoke', resource: `apiKeys/${k._id}`, text: `You revoked ${k.kind === 'peer' ? `${k.name}'s access` : `the key “${k.name}”`}`, tone: 'owner' });
     return { revoked: true };
+  });
+
+  // ── an assistant's sessions, and undoing them ─────────────────────────
+  const appKeyOr404 = async (id: string) => {
+    const k = await ctx.store.get<ApiKeyDoc>('apiKeys', id);
+    if (!k || k.kind !== 'app') throw notFound('key_not_found');
+    return k;
+  };
+
+  /** What an app or assistant changed, grouped into sessions (no gap over 30 minutes), newest first. Works after it's revoked. */
+  app.get('/api/keys/:id/sessions', async (req) => {
+    await requireSession(req);
+    const k = await appKeyOr404((req.params as { id: string }).id);
+    const domains = new Map((await listDomains()).map((d) => [d.id, d]));
+    const sessions = sessionsOf(await appVersions(k._id)).slice(0, 30);
+    return {
+      key: { id: k._id, name: k.name, revoked: !!k.revokedAt },
+      items: sessions.map((s) => {
+        const records = new Map<string, { recordId: string; domain: string; domainLabel: string; title: string; added: boolean; changes: number }>();
+        for (const v of s) {
+          const d = domains.get(v.domain);
+          const r = records.get(v.recordId) ?? { recordId: v.recordId, domain: v.domain, domainLabel: d?.label ?? v.domain, title: '', added: false, changes: 0 };
+          r.title = d ? recordOut(d, versionRecord(v)).title : v.recordId;
+          r.added ||= v.action === 'create';
+          r.changes++;
+          records.set(v.recordId, r);
+        }
+        return { start: s[0].at, end: s.at(-1)!.at, changes: s.length, records: [...records.values()] };
+      }),
+    };
+  });
+
+  /** Undo one session, field by field. Fields changed since by someone else are left alone and reported. */
+  app.post('/api/keys/:id/sessions/undo', async (req) => {
+    const p = await requireSession(req);
+    const k = await appKeyOr404((req.params as { id: string }).id);
+    const start = String((req.body as { start?: string } | null)?.start || '');
+    const session = sessionsOf(await appVersions(k._id)).find((s) => s[0].at === start);
+    if (!session) throw notFound('session_not_found');
+    const results = await undoChanges(session, k._id, { type: 'owner', id: p.key._id });
+    for (const dom of new Set(results.filter((r) => r.outcome === 'reverted' || r.outcome === 'removed').map((r) => r.domain))) nudgePeers(await contactsSharing(dom));
+    const n = results.filter((r) => r.outcome === 'reverted' || r.outcome === 'removed').length;
+    await audit({ actor: ownerActor(p.key._id), action: 'undo.session', resource: `apiKeys/${k._id}`, text: `You undid ${k.name}'s changes to ${n} ${n === 1 ? 'entry' : 'entries'}`, tone: 'owner' });
+    return { results };
   });
 
   // ── audit ────────────────────────────────────────────────────────────

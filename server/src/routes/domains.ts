@@ -8,6 +8,7 @@ import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner, requireSession, type ApiKeyDoc } from '../auth.js';
 import { pendingReply, propose, reviewInput, type ReviewDoc } from '../reviews.js';
 import { mask } from '../fields.js';
+import { undoOnRecord } from '../undo.js';
 import { contactsSharing, nudgePeers } from '../contacts.js';
 import { documentsByRecord, recordRemoved } from '../documents.js';
 import { isDateTime } from '../domains/datetime.js';
@@ -214,7 +215,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     if (q.from || q.to) recs = recs.filter((r) => inRange(r, q.from, q.to));
     const docs = await documentsByRecord(d.id);
     const label = await actorLabels();
-    return { domain: d.id, items: recs.map((r) => { const out = recordOut(d, r); return { ...out, updatedByLabel: label(out.updatedBy), documents: docs.get(r._id) ?? [] }; }) };
+    return { domain: d.id, items: recs.map((r) => { const out = recordOut(d, r); return { ...out, updatedByLabel: label(out.updatedBy), sourceLabel: label(out.source), documents: docs.get(r._id) ?? [] }; }) };
   });
 
   app.post(base, async (req, reply) => {
@@ -235,7 +236,8 @@ export default async function domainRoutes(app: FastifyInstance) {
     const { d, id } = await ctxFor(req, false);
     const r = await recordOr404(d, id!);
     const out = recordOut(d, r);
-    return { ...out, updatedByLabel: (await actorLabels())(out.updatedBy), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
+    const label = await actorLabels();
+    return { ...out, updatedByLabel: label(out.updatedBy), sourceLabel: label(out.source), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
   });
 
   app.patch(`${base}/:id`, async (req, reply) => {
@@ -319,6 +321,21 @@ export default async function domainRoutes(app: FastifyInstance) {
     const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
     await audit({ actor: ownerActor(p.key._id), action: 'record.restore', resource: `${d.id}/${id}`, text: `${actorName(p)} ${existing ? 'restored an earlier version of' : 'brought back'} ${out.title} in ${d.label}`, tone: 'owner' });
     return out;
+  });
+
+  /** Undo one change an app or assistant made, field by field (never over a later edit). */
+  app.post('/api/data/:domain/:id/history/:version/undo', async (req) => {
+    const p = await requireSession(req);
+    const { domain, id, version } = req.params as { domain: string; id: string; version: string };
+    const v = await ctx.store.get<VersionDoc>('recordVersions', version);
+    if (!v || v.recordId !== id || v.domain !== domain) throw notFound('version_not_found');
+    if (v.by.type !== 'app') throw bad('not_an_app_change', 'Only changes made by apps and assistants can be undone this way. Restore an earlier version instead.');
+    const result = await undoOnRecord(id, [v], v.by.id, { type: 'owner', id: p.key._id });
+    if (result.outcome === 'reverted' || result.outcome === 'removed') {
+      nudgePeers(DERIVED_DOMAINS.has(domain) ? null : await contactsSharing(domain));
+      await audit({ actor: ownerActor(p.key._id), action: 'undo.change', resource: `${domain}/${id}`, text: `You undid a change to ${result.title}`, tone: 'owner' });
+    }
+    return result;
   });
 
   // ── review: changes assistants proposed, waiting for the owner ─────────

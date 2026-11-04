@@ -122,7 +122,7 @@ The capability list never describes the owner's data: not which domains hold rec
 | `recovery-kit` | `POST /api/node/recovery-kit` produces a kit |
 | `restore` | A fresh node can be restored from a kit and a backup at `POST /api/node/claim/restore` |
 | `mcp` | An MCP server (Streamable HTTP, stateless) at the descriptor's `mcp` address, for AI assistants using an app key |
-| `assistants` | App keys can carry an assistant mode (answer, suggest, make) and readable secret fields; suggested changes wait at `/api/reviews` for the owner |
+| `assistants` | App keys can carry an assistant mode (answer, suggest, make) and readable secret fields; suggested changes wait at `/api/reviews` for the owner; an app's changes can be undone by session or one at a time, never over a later edit |
 
 The list lives in `CAPABILITIES` in `server/src/node.ts`.
 

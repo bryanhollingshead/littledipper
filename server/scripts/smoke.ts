@@ -344,6 +344,29 @@ async function main() {
     const orphan = (await a.call('GET', '/api/reviews')).items.find((r: any) => r.by === 'Muse (leaving)');
     ok(orphan && (await a.call('POST', `/api/reviews/${orphan.id}/approve`)).status === 'approved', "a disconnected assistant's suggestions stay, and can still be approved");
     for (const r of (await a.call('GET', '/api/data/employment')).items.filter((x: any) => ['Initech', 'Hooli'].includes(x.data.employer))) await a.call('DELETE', `/api/data/employment/${r.id}`);
+    // Provenance and undo
+    const undoKey = await a.call('POST', '/api/keys', { name: 'Muse (undo)', scopes: empScopes, assistant: { mode: 'make', secretFields: [] } });
+    const muse = as(undoKey.secret);
+    const clerk = await a.call('POST', '/api/data/employment', { data: { employer: 'Initrode', title: 'Clerk', city: 'Austin' }, validFrom: '2010' });
+    await muse('update_record', { kind: 'employment', id: clerk.id, notes: 'Promoted', data: { title: 'Manager', city: 'Dallas' } });
+    await a.call('PATCH', `/api/data/employment/${clerk.id}`, { data: { city: 'Houston' } });
+    const added = (await muse('add_record', { kind: 'employment', data: { employer: 'Vandelay', title: 'Importer' } })).structuredContent;
+    const addedNow = await a.call('GET', `/api/data/employment/${added.id}`);
+    ok(addedNow.sourceLabel === 'Muse (undo)' && addedNow.updatedByLabel === 'Muse (undo)', "a record says which assistant added it");
+    const sessions = (await a.call('GET', `/api/keys/${undoKey.id}/sessions`)).items;
+    ok(sessions.length === 1 && sessions[0].changes === 2 && sessions[0].records.some((r: any) => r.added && r.recordId === added.id), "an assistant's changes are grouped into a session");
+    const undone = (await a.call('POST', `/api/keys/${undoKey.id}/sessions/undo`, { start: sessions[0].start })).results;
+    const clerkNow = await a.call('GET', `/api/data/employment/${clerk.id}`);
+    const clerkResult = undone.find((r: any) => r.recordId === clerk.id);
+    ok(clerkNow.data.title === 'Clerk' && clerkNow.notes === '' && clerkNow.data.city === 'Houston' && clerkResult.skipped.includes('City'), "undoing a session puts back the assistant's changes but keeps the owner's later edit, and says so");
+    ok(undone.find((r: any) => r.recordId === added.id).outcome === 'removed' && (await a.call('GET', '/api/data/employment/deleted')).items.some((v: any) => v.record.id === added.id), 'a record the assistant added is removed, and stays recoverable');
+    await muse('update_record', { kind: 'employment', id: clerk.id, notes: 'Second try' });
+    const lastChange = (await a.call('GET', `/api/data/employment/${clerk.id}/history`)).items[0];
+    const one = await a.call('POST', `/api/data/employment/${clerk.id}/history/${lastChange.version}/undo`);
+    ok(one.outcome === 'reverted' && (await a.call('GET', `/api/data/employment/${clerk.id}`)).notes === '', 'a single assistant change can be undone from history');
+    const ownerChange = (await a.call('GET', `/api/data/employment/${clerk.id}/history`)).items.find((v: any) => v.by.type === 'owner');
+    await a.call('POST', `/api/data/employment/${clerk.id}/history/${ownerChange.version}/undo`, undefined, [400]);
+    await a.call('DELETE', `/api/data/employment/${clerk.id}`);
     // Sharing a domain with a connection
     await a.call('PUT', `/api/contacts/${cA.id}/grants`, { domains: { employment: { scope: 'current' } } });
     await a.call('PUT', `/api/contacts/${cA.id}/grants`, { domains: { ids: true } }, [409]);

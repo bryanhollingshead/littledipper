@@ -26,6 +26,7 @@ export default function Apps() {
   const [showDomains, setShowDomains] = useState(false);
   const [newKey, setNewKey] = useState<{ name: string; scopes: Record<string, boolean>; secret: string | null; assistant?: Assistant | null } | null>(null);
   const [editing, setEditing] = useState<Key | null>(null);
+  const [activity, setActivity] = useState<Key | null>(null);
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
 
   const { data: catalog } = useAsync(fetchCatalog, []);
@@ -61,9 +62,14 @@ export default function Apps() {
   };
   const revoke = (k: Key) => setConfirm({
     title: `Revoke ${k.name}?`,
-    body: k.kind === 'peer' ? 'They will lose access to everything you share. The contact stays in your list.' : 'Anything using this key stops working immediately.',
+    body: k.kind === 'peer' ? 'They will lose access to everything you share. The contact stays in your list.'
+      : k.assistant ? 'It stops working immediately. Anything it suggested stays in Review, and you can undo what it changed next.'
+        : 'Anything using this key stops working immediately.',
     cta: 'Revoke',
-    onConfirm: async () => { if (await run(() => del(`/api/keys/${k.id}`), 'Key revoked')) reload(); setConfirm(null); },
+    onConfirm: async () => {
+      if (await run(() => del(`/api/keys/${k.id}`), 'Key revoked')) { reload(); if (k.assistant) setActivity(k); }
+      setConfirm(null);
+    },
   });
 
   return (
@@ -88,6 +94,7 @@ export default function Apps() {
                         <span className="tag tag-accent-2" style={{ fontSize: 11 }}>{modeLabel(k.assistant.mode)}</span>
                         {k.assistant.secretFields.length > 0 && <span className="tag tag-accent" style={{ fontSize: 11 }}>{k.assistant.secretFields.length} secret {k.assistant.secretFields.length === 1 ? 'field' : 'fields'}</span>}
                         <button className="btn btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }} onClick={() => setEditing(k)}>Change</button>
+                        <button className="btn btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }} onClick={() => setActivity(k)}>What it did</button>
                       </div>
                     )}
                   </td>
@@ -172,8 +179,57 @@ export default function Apps() {
         </Dialog>
       )}
       {editing?.assistant && <EditAssistant k={editing} domains={(catalog ?? []).filter((d) => editing.scopes.includes('records:read') || editing.scopes.includes(`${d.id}:read`))} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+      {activity && <AssistantActivity k={activity} onClose={() => setActivity(null)} />}
       {confirm && <Confirm cfg={confirm} onClose={() => setConfirm(null)} />}
     </div>
+  );
+}
+
+type Session = { start: string; end: string; changes: number; records: { recordId: string; domain: string; domainLabel: string; title: string; added: boolean; changes: number }[] };
+type UndoResult = { recordId: string; title: string; outcome: 'reverted' | 'removed' | 'skipped' | 'nothing'; reverted: string[]; skipped: string[]; reason?: string };
+
+/** An assistant's changes, grouped into sessions, each one undoable. */
+function AssistantActivity({ k, onClose }: { k: Key; onClose: () => void }) {
+  const { run, busy } = useAction();
+  const { data, reload } = useAsync(() => get<{ items: Session[] }>(`/api/keys/${k.id}/sessions`), [k.id]);
+  const [results, setResults] = useState<UndoResult[] | null>(null);
+  const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const undo = async (s: Session) => {
+    const r = await run(() => post<{ results: UndoResult[] }>(`/api/keys/${k.id}/sessions/undo`, { start: s.start }));
+    if (r) { setResults(r.results); reload(); }
+  };
+  return (
+    <Dialog title={`What ${k.name} did`} onClose={onClose} width={600} actions={<button className="btn btn-primary" onClick={onClose}>Done</button>}>
+      {results && (
+        <div className="card" style={{ padding: '14px 16px', gap: 6 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Undone</div>
+          {results.map((r) => (
+            <div key={r.recordId} style={{ fontSize: 13 }}>
+              <strong>{r.title}</strong>: {r.outcome === 'removed' ? 'removed (you can bring it back for 30 days)' : r.outcome === 'reverted' ? `put back ${r.reverted.join(', ')}` : r.reason ?? 'nothing to undo'}
+              {r.outcome === 'reverted' && r.skipped.length > 0 && <span className="text-muted">. Kept your later change to {r.skipped.join(', ')}.</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {!data ? <Loading /> : !data.items.length ? <div className="text-muted" style={{ fontSize: 14 }}>It hasn’t changed anything yet.</div> : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          <div className="text-muted" style={{ fontSize: 12.5 }}>Undo puts back only what it changed. Anything you’ve changed since stays as you left it.</div>
+          {data.items.map((s) => (
+            <div key={s.start} style={{ display: 'grid', gap: 6, padding: '12px 14px', borderRadius: 14, background: 'var(--color-neutral-100)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 13 }}><strong>{when(s.start)}</strong> · {s.records.length} {s.records.length === 1 ? 'entry' : 'entries'}</div>
+                <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={busy} onClick={() => undo(s)}>Undo this session</button>
+              </div>
+              {s.records.map((r) => (
+                <div key={r.recordId} style={{ fontSize: 13 }}>
+                  {r.added ? 'Added' : 'Changed'} {r.title} <span className="text-muted">({r.domainLabel})</span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </Dialog>
   );
 }
 
