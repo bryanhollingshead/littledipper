@@ -13,6 +13,7 @@ type Admin = {
   pendingIn: number;
   unreadMessages: number;
   inboxDocs: number;
+  pendingReview: number;
   refresh: () => void;
 };
 const AdminCtx = createContext<Admin>(null as never);
@@ -20,7 +21,7 @@ export const useAdmin = () => useContext(AdminCtx);
 
 const NAV: [string, string, IconName][] = [
   ['/admin', 'Home', 'home'], ['/admin/calendar', 'Calendar', 'calendar'], ['/admin/life', 'My data', 'data'], ['/admin/documents', 'Documents', 'documents'], ['/admin/lifestream', 'Lifestream', 'lifestream'],
-  ['/admin/receipts', 'Receipts', 'receipts'], ['/admin/contacts', 'Contacts', 'contacts'], ['/admin/messages', 'Messages', 'messages'],
+  ['/admin/receipts', 'Receipts', 'receipts'], ['/admin/contacts', 'Contacts', 'contacts'], ['/admin/messages', 'Messages', 'messages'], ['/admin/review', 'Review', 'review'],
   ['/admin/public', 'Public profile', 'profile'], ['/admin/apps', 'Apps and access', 'apps'], ['/admin/settings', 'Settings', 'settings'],
 ];
 const DOCS: [string, string, IconName][] = [['/admin/reference/model', 'Data model', 'model'], ['/admin/reference/endpoints', 'Endpoints', 'endpoints']];
@@ -42,6 +43,7 @@ export default function AdminLayout() {
   const [pendingIn, setPendingIn] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [inboxDocs, setInboxDocs] = useState(0);
+  const [pendingReview, setPendingReview] = useState(0);
   const [authError, setAuthError] = useState(false);
   const [n, setN] = useState(0);
   const [rail, setRail] = useState(readRail);
@@ -52,13 +54,14 @@ export default function AdminLayout() {
 
   const load = useCallback(async () => {
     try {
-      const [o, nd, reqs, unread, docs] = await Promise.all([get<Owner>('/api/owner'), get<NodeInfo>('/api/node'), get('/api/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/messages/unread'), get<{ items: unknown[] }>('/api/documents?status=inbox')]);
+      const [o, nd, reqs, unread, docs, reviews] = await Promise.all([get<Owner>('/api/owner'), get<NodeInfo>('/api/node'), get('/api/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/messages/unread'), get<{ items: unknown[] }>('/api/documents?status=inbox'), get<{ items: unknown[] }>('/api/reviews')]);
       setOwner(o);
       setNode(nd);
       // Stranger requests under "Anyone" wait quietly: no badge.
       setPendingIn(reqs.items.filter((r: { quiet: boolean }) => !r.quiet).length);
       setUnreadMessages(unread.count);
       setInboxDocs(docs.items.length);
+      setPendingReview(reviews.items.length);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setAuthError(true);
     }
@@ -89,7 +92,7 @@ export default function AdminLayout() {
   const isOn = (to: string) => (to === '/admin' ? loc.pathname === '/admin' : loc.pathname.startsWith(to));
 
   return (
-    <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, refresh: () => setN((x) => x + 1) }}>
+    <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, pendingReview, refresh: () => setN((x) => x + 1) }}>
       <div className="shell">
         <aside className="sidebar" aria-label="Main" data-rail={rail ? '1' : '0'}>
           <div className="side-head">
@@ -105,7 +108,7 @@ export default function AdminLayout() {
               style={{ all: 'unset', cursor: 'pointer', fontSize: 11, opacity: 0.75 }}>{node.id.slice(0, 8)}…{node.id.slice(-4)}</button>
           </div>
           {NAV.map(([to, label, icon]) => {
-            const count = to === '/admin/contacts' ? pendingIn : to === '/admin/messages' ? unreadMessages : to === '/admin/documents' ? inboxDocs : 0;
+            const count = to === '/admin/contacts' ? pendingIn : to === '/admin/messages' ? unreadMessages : to === '/admin/documents' ? inboxDocs : to === '/admin/review' ? pendingReview : 0;
             return (
               <NavLink key={to} to={to} end={to === '/admin'} className="nav-pill" aria-current={isOn(to) ? 'page' : undefined}
                 title={rail ? (count ? `${label} (${count})` : label) : undefined} aria-label={rail ? (count ? `${label} (${count})` : label) : undefined}>

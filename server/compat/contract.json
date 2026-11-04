@@ -1,6 +1,7 @@
 {
   "capabilities": [
     "address-change",
+    "assistants",
     "backups.device",
     "calendar",
     "calendar.share",
@@ -71,6 +72,7 @@
     "GET /api/owner/fields",
     "GET /api/public-profile",
     "GET /api/public-profile/options",
+    "GET /api/reviews",
     "GET /api/timeline",
     "GET /peer/domains",
     "GET /peer/domains/{}",
@@ -86,6 +88,7 @@
     "PATCH /api/contacts/{}",
     "PATCH /api/data/{}/{}",
     "PATCH /api/documents/{}",
+    "PATCH /api/keys/{}",
     "PATCH /api/node",
     "PATCH /api/owner",
     "POST /api/auth/fallback/disable",
@@ -139,6 +142,8 @@
     "POST /api/owner",
     "POST /api/owner/fields",
     "POST /api/owner/fields/{}/reveal",
+    "POST /api/reviews/{}/approve",
+    "POST /api/reviews/{}/reject",
     "POST /peer/address-change",
     "POST /peer/links/changed",
     "POST /peer/links/revoke",

@@ -24,7 +24,26 @@ export type ApiKeyDoc = Doc & {
   expiresAt: string | null;
   revokedAt: string | null;
   label?: string;
+  /** Set on an app key that an AI assistant uses: what it may change, and which secret fields it may read. */
+  assistant?: AssistantSettings;
 };
+
+/**
+ * An assistant's mode: answer (read only), suggest (writes wait in Review) or make (writes go straight in,
+ * except secret values, which always wait in Review). secretFields lists "{domain}.{part}" it may read.
+ */
+export type AssistantMode = 'answer' | 'suggest' | 'make';
+export const ASSISTANT_MODES: AssistantMode[] = ['answer', 'suggest', 'make'];
+export type AssistantSettings = { mode: AssistantMode; secretFields: string[] };
+
+export function checkAssistant(v: unknown): AssistantSettings | undefined {
+  if (v === undefined || v === null) return undefined;
+  const a = v as Partial<AssistantSettings>;
+  if (!ASSISTANT_MODES.includes(a.mode as AssistantMode)) throw bad('invalid_value', `assistant.mode: one of ${ASSISTANT_MODES.join(', ')}`);
+  const fields = Array.isArray(a.secretFields) ? a.secretFields.map(String) : [];
+  if (fields.some((f) => !/^[a-z0-9_]+\.[A-Za-z0-9_]+$/.test(f))) throw bad('invalid_value', 'assistant.secretFields: use "{domain}.{part}"');
+  return { mode: a.mode as AssistantMode, secretFields: [...new Set(fields)] };
+}
 
 /** Fixed scopes. Each domain also has its own: {domain}:read and {domain}:write. records:* covers every domain. */
 export const SCOPES = ['owner:read', 'owner:write', 'records:read', 'records:write', 'contacts:read', 'contacts:write', 'public:write', 'keys:manage', 'audit:read', 'export', 'messages:read', 'messages:write', 'documents:read', 'documents:write'] as const;
@@ -35,13 +54,13 @@ const secure = () => config.hostUrl.startsWith('https://');
 export const cookieOpts = (maxAgeSec: number) => ({ path: '/', httpOnly: true, sameSite: 'strict' as const, secure: secure(), maxAge: maxAgeSec });
 
 /** Create a credential. The secret is returned once; only its hash and a display prefix are stored. */
-export async function issueKey(opts: { kind: ApiKeyDoc['kind']; name: string; scopes: string[]; ttlSec?: number; contactId?: string; label?: string }) {
+export async function issueKey(opts: { kind: ApiKeyDoc['kind']; name: string; scopes: string[]; ttlSec?: number; contactId?: string; label?: string; assistant?: AssistantSettings }) {
   const tag = { session: 'sess', app: 'live', peer: 'peer', setup: 'setup', mfa: 'mfa' }[opts.kind];
   const short = randomToken(3).replace(/[-_]/g, 'x').slice(0, 4).toLowerCase();
   const secret = `ldk_${tag}_${short}_${randomToken(24)}`;
   const doc: ApiKeyDoc = {
     _id: newId('key'), name: opts.name, kind: opts.kind, prefix: secret.slice(0, 14) + '…', hash: sha256(secret), scopes: opts.scopes,
-    contactId: opts.contactId, label: opts.label, createdAt: new Date().toISOString(), lastUsedAt: null,
+    contactId: opts.contactId, label: opts.label, ...(opts.assistant ? { assistant: opts.assistant } : {}), createdAt: new Date().toISOString(), lastUsedAt: null,
     expiresAt: opts.ttlSec ? new Date(Date.now() + opts.ttlSec * 1000).toISOString() : null, revokedAt: null,
   };
   await ctx.store.insert('apiKeys', doc);

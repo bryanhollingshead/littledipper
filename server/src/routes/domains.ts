@@ -5,7 +5,9 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ctx } from '../ctx.js';
 import { audit, ownerActor } from '../audit.js';
-import { bad, HttpError, notFound, requireOwner, requireSession } from '../auth.js';
+import { bad, HttpError, notFound, requireOwner, requireSession, type ApiKeyDoc } from '../auth.js';
+import { pendingReply, propose, reviewInput, type ReviewDoc } from '../reviews.js';
+import { mask } from '../fields.js';
 import { contactsSharing, nudgePeers } from '../contacts.js';
 import { documentsByRecord, recordRemoved } from '../documents.js';
 import { isDateTime } from '../domains/datetime.js';
@@ -66,6 +68,45 @@ function catalogEntry(d: DomainDef, sum: Summary) {
     endpoint: `/api/data/${d.id}`,
     feeds: Object.entries(DERIVED).filter(([, v]) => v.domain === d.id).map(([k]) => k),
   };
+}
+
+/** Who made a change, for the activity feed: "You", or the app or assistant's name. */
+const actorName = (p: { isSession: boolean; key: { name: string } }) => (p.isSession ? 'You' : p.key.name);
+
+/** Secret parts an input sets (a value, not a removal). */
+const secretKeys = (d: DomainDef, input: RecordInput) =>
+  Object.entries(input.data ?? {}).filter(([k, v]) => v !== null && v !== undefined && v !== '' && d.parts.some((x) => x.key === k && partSens(d, x) === 'secret')).map(([k]) => k);
+
+async function proposeChange(p: { key: ApiKeyDoc }, d: DomainDef, recordId: string | null, input: RecordInput, reason: ReviewDoc['reason']) {
+  const r = await propose(p.key, d.id, recordId, input, reason);
+  await audit({ actor: ownerActor(p.key._id), action: 'review.propose', resource: `reviews/${r._id}`, text: `${p.key.name} suggested ${recordId ? 'a change to' : 'a new entry in'} ${d.label}. It's waiting for you in Review.`, tone: 'request' });
+  return r;
+}
+
+export async function createRecord(d: DomainDef, input: RecordInput, by: Actor, who: string) {
+  const rec = await buildRecord(d, input, null, by);
+  await ctx.store.insert('records', rec);
+  await recordVersion(rec, 'create', by);
+  await demoteOtherPrimaries(rec);
+  await syncDerived(d.id);
+  const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
+  nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+  await audit({ actor: ownerActor(by.id), action: 'record.create', resource: `${d.id}/${rec._id}`, text: `${who} added ${out.title} to ${d.label}`, tone: 'owner' });
+  return out;
+}
+
+export async function updateRecord(d: DomainDef, existing: RecordDoc, input: RecordInput, by: Actor, who: string) {
+  const rec = await buildRecord(d, input, existing, by);
+  const { _id, ...rest } = rec;
+  // Replace data wholesale so removed parts really go.
+  await ctx.store.update('records', _id, { ...rest });
+  await recordVersion(rec, 'update', by);
+  await demoteOtherPrimaries(rec);
+  await syncDerived(d.id);
+  const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
+  nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
+  await audit({ actor: ownerActor(by.id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${who} updated ${out.title} in ${d.label}`, tone: 'owner' });
+  return out;
 }
 
 export default async function domainRoutes(app: FastifyInstance) {
@@ -159,6 +200,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     const { domain, id } = req.params as { domain: string; id?: string };
     const d = await domainOr404(domain);
     const p = await requireOwner(req, write ? writeScopes(d.id) : readScopes(d.id));
+    if (write && p.key.assistant?.mode === 'answer') throw new HttpError(403, 'read_only', 'Your owner set you to answer questions only. You can read, but not change anything.');
     const by: Actor = { type: p.isSession ? 'owner' : 'app', id: p.key._id };
     return { d, p, id, by };
   };
@@ -177,16 +219,16 @@ export default async function domainRoutes(app: FastifyInstance) {
 
   app.post(base, async (req, reply) => {
     const { d, p, by } = await ctxFor(req, true);
-    const rec = await buildRecord(d, (req.body || {}) as RecordInput, null, by);
-    await ctx.store.insert('records', rec);
-    await recordVersion(rec, 'create', by);
-    await demoteOtherPrimaries(rec);
-    await syncDerived(d.id);
-    const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
-    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
-    await audit({ actor: ownerActor(p.key._id), action: 'record.create', resource: `${d.id}/${rec._id}`, text: `${p.isSession ? 'You' : 'An app'} added ${out.title} to ${d.label}`, tone: 'owner' });
+    const input = (req.body || {}) as RecordInput;
+    const a = p.key.assistant;
+    if (a) {
+      // Check it now, so the assistant hears about a mistake straight away rather than at approval.
+      await buildRecord(d, input, null, by);
+      const reason = a.mode === 'suggest' ? 'suggest' : secretKeys(d, input).length ? 'secret' : null;
+      if (reason) { reply.code(202); return pendingReply(await proposeChange(p, d, null, input, reason)); }
+    }
     reply.code(201);
-    return out;
+    return createRecord(d, input, by, actorName(p));
   });
 
   app.get(`${base}/:id`, async (req) => {
@@ -196,24 +238,29 @@ export default async function domainRoutes(app: FastifyInstance) {
     return { ...out, updatedByLabel: (await actorLabels())(out.updatedBy), documents: (await documentsByRecord(d.id)).get(r._id) ?? [] };
   });
 
-  app.patch(`${base}/:id`, async (req) => {
+  app.patch(`${base}/:id`, async (req, reply) => {
     const { d, p, id, by } = await ctxFor(req, true);
     const existing = await recordOr404(d, id!);
-    const rec = await buildRecord(d, (req.body || {}) as RecordInput, existing, by);
-    const { _id, ...rest } = rec;
-    // Replace data wholesale so removed parts really go.
-    await ctx.store.update('records', _id, { ...rest });
-    await recordVersion(rec, 'update', by);
-    await demoteOtherPrimaries(rec);
-    await syncDerived(d.id);
-    const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
-    nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
-    await audit({ actor: ownerActor(p.key._id), action: 'record.update', resource: `${d.id}/${_id}`, text: `${p.isSession ? 'You' : 'An app'} updated ${out.title} in ${d.label}`, tone: 'owner' });
-    return out;
+    const input = (req.body || {}) as RecordInput;
+    const a = p.key.assistant;
+    if (a) {
+      await buildRecord(d, input, existing, by);
+      if (a.mode === 'suggest') { reply.code(202); return pendingReply(await proposeChange(p, d, existing._id, input, 'suggest')); }
+      // Make changes: everything goes in except secret values, which wait in Review.
+      const secrets = secretKeys(d, input);
+      if (secrets.length) {
+        const review = await proposeChange(p, d, existing._id, { data: Object.fromEntries(secrets.map((k) => [k, input.data![k]])) }, 'secret');
+        const rest: RecordInput = { ...input, data: Object.fromEntries(Object.entries(input.data!).filter(([k]) => !secrets.includes(k))) };
+        const saved = await updateRecord(d, existing, rest, by, actorName(p));
+        return { ...saved, pendingReview: pendingReply(review) };
+      }
+    }
+    return updateRecord(d, existing, input, by, actorName(p));
   });
 
   app.delete(`${base}/:id`, async (req) => {
     const { d, p, id, by } = await ctxFor(req, true);
+    if (p.key.assistant) throw new HttpError(403, 'owner_only', 'Only the owner deletes. Tell them what to remove.');
     const r = await recordOr404(d, id!);
     const title = recordOut(d, r).title;
     await recordVersion(r, 'delete', by);
@@ -221,15 +268,16 @@ export default async function domainRoutes(app: FastifyInstance) {
     const docsDeleted = await recordRemoved(r._id);
     await syncDerived(d.id);
     nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
-    await audit({ actor: ownerActor(p.key._id), action: 'record.delete', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} removed ${title} from ${d.label}`, tone: 'owner' });
+    await audit({ actor: ownerActor(p.key._id), action: 'record.delete', resource: `${d.id}/${r._id}`, text: `${actorName(p)} removed ${title} from ${d.label}`, tone: 'owner' });
     return { deleted: true, documentsDeleted: docsDeleted, restorableForDays: KEEP_DELETED_DAYS };
   });
 
   app.post(`${base}/:id/reveal`, async (req) => {
     const { d, p, id } = await ctxFor(req, false);
     const r = await recordOr404(d, id!);
-    const out = recordOut(d, r, { reveal: true });
-    await audit({ actor: ownerActor(p.key._id), action: 'record.reveal', resource: `${d.id}/${r._id}`, text: `${p.isSession ? 'You' : 'An app'} revealed ${recordOut(d, r).title} (${d.label})`, tone: 'owner', ip: req.ip });
+    const a = p.key.assistant;
+    const out = recordOut(d, r, { reveal: a ? new Set(a.secretFields.filter((f) => f.startsWith(`${d.id}.`)).map((f) => f.slice(d.id.length + 1))) : true });
+    await audit({ actor: ownerActor(p.key._id), action: 'record.reveal', resource: `${d.id}/${r._id}`, text: `${actorName(p)} revealed ${recordOut(d, r).title} (${d.label})`, tone: 'owner', ip: req.ip });
     return out;
   });
 
@@ -256,6 +304,7 @@ export default async function domainRoutes(app: FastifyInstance) {
   /** Make an earlier version current again, as a new change (or bring a deleted record back). Nothing is rewritten. */
   app.post('/api/data/:domain/:id/history/:version/restore', async (req) => {
     const { d, p, id, by } = await ctxFor(req, true);
+    if (p.key.assistant) throw new HttpError(403, 'owner_only', 'Only the owner restores earlier versions.');
     const { version } = req.params as { version: string };
     const v = await ctx.store.get<VersionDoc>('recordVersions', version);
     if (!v || v.recordId !== id || v.domain !== d.id) throw notFound('version_not_found');
@@ -268,7 +317,73 @@ export default async function domainRoutes(app: FastifyInstance) {
     await syncDerived(d.id);
     nudgePeers(DERIVED_DOMAINS.has(d.id) ? null : await contactsSharing(d.id));
     const out = { ...recordOut(d, rec), updatedByLabel: (await actorLabels())(by) };
-    await audit({ actor: ownerActor(p.key._id), action: 'record.restore', resource: `${d.id}/${id}`, text: `${p.isSession ? 'You' : 'An app'} ${existing ? 'restored an earlier version of' : 'brought back'} ${out.title} in ${d.label}`, tone: 'owner' });
+    await audit({ actor: ownerActor(p.key._id), action: 'record.restore', resource: `${d.id}/${id}`, text: `${actorName(p)} ${existing ? 'restored an earlier version of' : 'brought back'} ${out.title} in ${d.label}`, tone: 'owner' });
     return out;
+  });
+
+  // ── review: changes assistants proposed, waiting for the owner ─────────
+  // The owner sees every item; an assistant's key sees its own (secret values masked).
+  const reviewOut = async (r: ReviewDoc, owner: boolean) => {
+    const d = await getDomain(r.domain);
+    const input = reviewInput(r);
+    const current = r.recordId ? await ctx.store.get<RecordDoc>('records', r.recordId) : null;
+    const plainNow = current ? plainData(current) : {};
+    const show = (k: string, v: unknown) => (!owner && d?.parts.some((x) => x.key === k && partSens(d, x) === 'secret') ? mask(String(v)) : v);
+    return {
+      id: r._id, by: r.by, keyId: r.keyId, domain: r.domain, domainLabel: d?.label ?? r.domain, recordId: r.recordId,
+      recordTitle: d && current ? recordOut(d, current).title : null, recordGone: !!r.recordId && !current,
+      action: r.action, reason: r.reason, status: r.status, createdAt: r.createdAt, decidedAt: r.decidedAt, resultId: r.resultId ?? null,
+      changes: [
+        ...Object.entries(input.data ?? {}).map(([k, v]) => {
+          const part = d?.parts.find((x) => x.key === k);
+          const secret = !!(d && part && partSens(d, part) === 'secret');
+          return { key: k, label: part?.label ?? k, secret, to: show(k, v), from: r.recordId && owner ? (plainNow[k] ?? null) : undefined };
+        }),
+        ...(['validFrom', 'validTo', 'notes'] as const).filter((k) => input[k] !== undefined).map((k) => ({
+          key: k, label: { validFrom: 'From', validTo: 'To', notes: 'Notes' }[k], secret: false, to: input[k], from: current && owner ? current[k] ?? null : undefined,
+        })),
+      ],
+    };
+  };
+
+  app.get('/api/reviews', async (req) => {
+    const p = await requireOwner(req, ['records:read', 'records:write', ...(await listDomains()).flatMap((d) => [`${d.id}:read`, `${d.id}:write`])]);
+    const q = req.query as { status?: string };
+    const status = q.status === 'all' ? null : q.status || 'pending';
+    let items = await ctx.store.find<ReviewDoc>('reviews', status ? { status } : {}, { sort: { createdAt: -1 } });
+    if (!p.isSession) items = items.filter((r) => r.keyId === p.key._id);
+    return { items: await Promise.all(items.slice(0, 200).map((r) => reviewOut(r, p.isSession))) };
+  });
+
+  const reviewOr404 = async (id: string) => {
+    const r = await ctx.store.get<ReviewDoc>('reviews', id);
+    if (!r) throw notFound('review_not_found');
+    if (r.status !== 'pending') throw new HttpError(409, 'already_decided', `This was already ${r.status}.`);
+    return r;
+  };
+
+  /** Approve: the change is saved now, credited to the assistant that proposed it. */
+  app.post('/api/reviews/:id/approve', async (req) => {
+    const p = await requireSession(req);
+    const r = await reviewOr404((req.params as { id: string }).id);
+    const d = await domainOr404(r.domain);
+    const by: Actor = { type: 'app', id: r.keyId };
+    let saved;
+    if (r.recordId) {
+      const existing = await ctx.store.get<RecordDoc>('records', r.recordId);
+      if (!existing) throw new HttpError(409, 'record_gone', 'That entry was deleted since. Reject this suggestion instead.');
+      saved = await updateRecord(d, existing, reviewInput(r), by, `${r.by} (approved by you)`);
+    } else saved = await createRecord(d, reviewInput(r), by, `${r.by} (approved by you)`);
+    await ctx.store.update('reviews', r._id, { status: 'approved', decidedAt: new Date().toISOString(), resultId: saved.id });
+    await audit({ actor: ownerActor(p.key._id), action: 'review.approve', resource: `reviews/${r._id}`, text: `You approved ${r.by}'s suggestion for ${d.label}`, tone: 'owner' });
+    return { ...(await reviewOut({ ...r, status: 'approved', decidedAt: new Date().toISOString(), resultId: saved.id }, true)), record: saved };
+  });
+
+  app.post('/api/reviews/:id/reject', async (req) => {
+    const p = await requireSession(req);
+    const r = await reviewOr404((req.params as { id: string }).id);
+    await ctx.store.update('reviews', r._id, { status: 'rejected', decidedAt: new Date().toISOString() });
+    await audit({ actor: ownerActor(p.key._id), action: 'review.reject', resource: `reviews/${r._id}`, text: `You turned down ${r.by}'s suggestion`, tone: 'owner' });
+    return reviewOut({ ...r, status: 'rejected', decidedAt: new Date().toISOString() }, true);
   });
 }

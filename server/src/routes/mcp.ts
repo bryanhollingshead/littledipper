@@ -15,10 +15,11 @@ const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_BATCH = 50;
 
 const INSTRUCTIONS = `This is the owner's Little Dipper: their records (addresses, jobs, IDs, insurance, vehicles and more, each with when it applied), their documents, and the dates that matter.
-- Call whoami first to see which kinds of records your key can read or change.
+- Call whoami first to see which kinds of records your key can read or change, and your mode: answer (read only), suggest (your changes wait for the owner to approve them) or make (your changes are saved, except secret values, which always wait for approval).
+- When a change comes back "pending_review", tell the owner it's waiting for them in Review. Don't say it's saved. list_review_items shows what's still waiting.
 - Call list_kinds to learn each kind's fields before adding or updating records. Use the field keys it gives you.
 - Dated kinds keep history: when something ends (a move, a job change), set validTo on the old record and add a new one, rather than overwriting it.
-- Fields marked secret come back masked. You can't read their values.
+- Fields marked secret come back masked unless the owner has let you read that field.
 - There is no delete tool. If something was filed wrong, tell the owner: they can undo or remove it.`;
 
 type Json = Record<string, unknown>;
@@ -53,6 +54,8 @@ const kindOf = (args: Json) => encodeURIComponent(String(args.kind || ''));
 const recordInput = (args: Json) => ({ data: args.data, validFrom: args.validFrom, validTo: args.validTo, notes: args.notes });
 const brief = (r: Json) => ({ id: r.id, kind: r.domain, title: r.title, current: r.current, validFrom: r.validFrom, validTo: r.validTo, data: r.data, masked: r.masked });
 const day = (d: Date) => d.toISOString().slice(0, 10);
+/** A saved record, or the note that it's waiting in Review. */
+const written = (b: Json) => (b.status === 'pending_review' ? b : { ...brief(b), ...(b.pendingReview ? { pendingReview: b.pendingReview } : {}) });
 
 const TOOLS: Tool[] = [
   {
@@ -114,7 +117,11 @@ const TOOLS: Tool[] = [
     inputSchema: obj({ kind: str('The kind.'), id: str('The record id.') }, ['kind', 'id']),
     annotations: { readOnlyHint: true },
     run: async (a, call) => {
-      const r = await ok(call('GET', `/api/data/${kindOf(a)}/${encodeURIComponent(String(a.id))}`));
+      // An assistant the owner has let read some secret fields of this kind gets those revealed (and only those).
+      const me = await ok(call('GET', '/api/keys/me')) as { assistant?: { secretFields: string[] } | null };
+      const revealed = me.assistant?.secretFields.some((f) => f.startsWith(`${a.kind}.`));
+      const path = `/api/data/${kindOf(a)}/${encodeURIComponent(String(a.id))}`;
+      const r = { ...(await ok(call('GET', path))), ...(revealed ? await ok(call('POST', `${path}/reveal`, {})) : {}) };
       return { ...brief(r), notes: r.notes, documents: r.documents, updatedBy: r.updatedByLabel, updatedAt: r.updatedAt };
     },
   },
@@ -122,11 +129,11 @@ const TOOLS: Tool[] = [
     name: 'add_record', title: 'Add a record',
     description: 'Add one record of a kind. Check list_kinds for its fields first.',
     inputSchema: obj({ kind: str('The kind.'), ...recordFields }, ['kind', 'data']),
-    run: async (a, call) => brief(await ok(call('POST', `/api/data/${kindOf(a)}`, recordInput(a)))),
+    run: async (a, call) => written(await ok(call('POST', `/api/data/${kindOf(a)}`, recordInput(a)))),
   },
   {
     name: 'add_records', title: 'Add several records',
-    description: `Add up to ${MAX_BATCH} records of one kind in one call, e.g. imported from another account. Each is added on its own: the result says which were added and which failed, and why.`,
+    description: `Add up to ${MAX_BATCH} records of one kind in one call, e.g. imported from another account. Each is added on its own: the result says which were added, which are waiting in Review, and which failed and why.`,
     inputSchema: obj({ kind: str('The kind.'), records: { type: 'array', maxItems: MAX_BATCH, items: obj(recordFields, ['data']) } }, ['kind', 'records']),
     run: async (a, call) => {
       const list = Array.isArray(a.records) ? (a.records as Json[]) : [];
@@ -135,16 +142,23 @@ const TOOLS: Tool[] = [
       for (const [i, rec] of list.entries()) {
         const r = await call('POST', `/api/data/${kindOf(a)}`, recordInput(rec));
         const b = (r.body || {}) as Json;
-        results.push(r.status < 400 ? { index: i, added: true, id: b.id, title: b.title } : { index: i, added: false, error: `${b.code}: ${b.message}` });
+        results.push(
+          r.status === 202 ? { index: i, added: false, savedForReview: true, reviewId: b.reviewId }
+            : r.status < 400 ? { index: i, added: true, id: b.id, title: b.title }
+              : { index: i, added: false, error: `${b.code}: ${b.message}` },
+        );
       }
-      return { kind: a.kind, added: results.filter((r) => r.added).length, failed: results.filter((r) => !r.added).length, results };
+      return {
+        kind: a.kind, added: results.filter((r) => r.added).length, savedForReview: results.filter((r) => 'savedForReview' in r).length,
+        failed: results.filter((r) => 'error' in r).length, results,
+      };
     },
   },
   {
     name: 'update_record', title: 'Update a record',
     description: 'Change some fields of a record. Only the fields you send change; set a field to null to remove it. To record that something ended, set validTo instead of changing it into something else.',
     inputSchema: obj({ kind: str('The kind.'), id: str('The record id.'), ...recordFields }, ['kind', 'id']),
-    run: async (a, call) => brief(await ok(call('PATCH', `/api/data/${kindOf(a)}/${encodeURIComponent(String(a.id))}`, recordInput(a)))),
+    run: async (a, call) => written(await ok(call('PATCH', `/api/data/${kindOf(a)}/${encodeURIComponent(String(a.id))}`, recordInput(a)))),
   },
   {
     name: 'search_documents', title: 'Find documents',
@@ -186,6 +200,16 @@ const TOOLS: Tool[] = [
       const link = a.fileOnKind && a.fileOnId ? `${a.fileOnKind}:${a.fileOnId}` : undefined;
       const d = await ok(call('POST', `/api/documents${q({ name: a.name, title: a.title, kind: a.documentKind, date: a.date, link })}`, bytes, String(a.mimeType)));
       return { id: d.id, title: d.title, kind: d.kind, filedOn: d.links };
+    },
+  },
+  {
+    name: 'list_review_items', title: 'Waiting in Review',
+    description: 'Changes you proposed that wait for the owner (or, with status=all, also the ones they approved or turned down). Secret values stay masked.',
+    inputSchema: obj({ status: { type: 'string', enum: ['pending', 'approved', 'rejected', 'all'], description: 'Default pending.' } }),
+    annotations: { readOnlyHint: true },
+    run: async (a, call) => {
+      const r = await ok(call('GET', `/api/reviews${q({ status: a.status })}`)) as { items: Json[] };
+      return { items: r.items.map(({ keyId: _k, ...rest }) => rest) };
     },
   },
   {

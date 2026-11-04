@@ -206,19 +206,20 @@ export function renderTitle(d: DomainDef, values: Record<string, unknown>, hidde
 export const isCurrent = (d: DomainDef, r: RecordDoc) => !d.dated || !r.validTo || r.validTo >= new Date().toISOString().slice(0, r.validTo.length);
 
 /** API shape. Secret parts are masked unless revealed; `masked` lists which. */
-export function recordOut(d: DomainDef, r: RecordDoc, opts: { reveal?: boolean } = {}) {
+/** reveal: true shows every secret part; a set shows just those part keys (an assistant's allowed secrets). */
+export function recordOut(d: DomainDef, r: RecordDoc, opts: { reveal?: boolean | Set<string> } = {}) {
   const plain = plainData(r);
   const data: Record<string, unknown> = {};
   const masked: string[] = [];
   for (const p of d.parts) {
     if (!(p.key in plain)) continue;
-    if (partSens(d, p) === 'secret' && !opts.reveal) {
+    if (partSens(d, p) === 'secret' && !(opts.reveal === true || (opts.reveal instanceof Set && opts.reveal.has(p.key)))) {
       masked.push(p.key);
       data[p.key] = p.type === 'money' ? null : mask(String(plain[p.key]));
     } else data[p.key] = plain[p.key];
   }
   return {
-    id: r._id, domain: d.id, title: renderTitle(d, plain, opts.reveal ? undefined : new Set(masked)),
+    id: r._id, domain: d.id, title: renderTitle(d, plain, masked.length ? new Set(masked) : undefined),
     data, masked, validFrom: r.validFrom, validTo: r.validTo, current: isCurrent(d, r),
     // Records from before per-edit provenance (or restored from an older backup) were last changed by their creator.
     notes: r.notes, source: r.source, updatedBy: r.updatedBy ?? r.source, schemaVersion: r.schemaVersion, createdAt: r.createdAt, updatedAt: r.updatedAt,

@@ -63,7 +63,7 @@ export const CAPABILITIES = [
   'calendar', 'calendar.share',
   'documents', 'documents.share-links', 'copies', 'messages',
   'address-change', 'backups.device', 'recovery-kit', 'restore',
-  'mcp',
+  'mcp', 'assistants',
 ] as const;
 
 export function descriptor(n: NodeDoc, displayName: string | null, connectRequests: string) {

@@ -15,6 +15,7 @@ import Calendar from './pages/admin/Calendar';
 import Contacts from './pages/admin/Contacts';
 import ContactDetail from './pages/admin/ContactDetail';
 import Messages from './pages/admin/Messages';
+import Review from './pages/admin/Review';
 import Receipts from './pages/admin/Receipts';
 import Documents from './pages/admin/Documents';
 import SharedDocument from './pages/SharedDocument';
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="contacts" element={<Contacts />} />
             <Route path="contacts/:id" element={<ContactDetail />} />
             <Route path="messages" element={<Messages />} />
+            <Route path="review" element={<Review />} />
             <Route path="messages/:contactId" element={<Messages />} />
             <Route path="public" element={<PublicEditor />} />
             <Route path="apps" element={<Apps />} />

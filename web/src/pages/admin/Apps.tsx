@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ago, copy, del, get, post, shortDate } from '../../api';
-import { Confirm, Dialog, ErrorNote, Loading, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
+import { ago, copy, del, get, patch, post, shortDate } from '../../api';
+import { Confirm, Dialog, ErrorNote, Loading, Toggle, useAction, useAsync, useToast, type ConfirmCfg } from '../../ui';
 import { ENDPOINTS, MDARK, SCOPES } from '../../reference';
-import { fetchCatalog } from '../../life';
+import { fetchCatalog, type Domain } from '../../life';
 import { useAdmin } from './Layout';
 
-type Key = { id: string; name: string; kind: 'session' | 'app' | 'peer'; prefix: string; scopes: string[]; createdAt: string; lastUsedAt: string | null; current: boolean };
+type Mode = 'answer' | 'suggest' | 'make';
+type Assistant = { mode: Mode; secretFields: string[] };
+type Key = { id: string; name: string; kind: 'session' | 'app' | 'peer'; prefix: string; scopes: string[]; createdAt: string; lastUsedAt: string | null; current: boolean; assistant: Assistant | null };
+const MODES: [Mode, string, string][] = [
+  ['answer', 'Answer questions', 'Reads what you allow. Changes nothing.'],
+  ['suggest', 'Suggest changes', 'Its changes wait in Review until you approve them.'],
+  ['make', 'Make changes', 'Its changes are saved straight away. You can see and undo them.'],
+];
+const modeLabel = (m: Mode) => MODES.find(([k]) => k === m)![1];
 const KIND = { session: 'Owner session', peer: 'Peer token', app: 'App key' };
 
 export default function Apps() {
@@ -16,7 +24,8 @@ export default function Apps() {
   const [params, setParams] = useSearchParams();
   const { data, error, reload } = useAsync(() => get<{ items: Key[]; domainScopes: { domain: string; label: string; read: string; write: string }[] }>('/api/keys'), []);
   const [showDomains, setShowDomains] = useState(false);
-  const [newKey, setNewKey] = useState<{ name: string; scopes: Record<string, boolean>; secret: string | null } | null>(null);
+  const [newKey, setNewKey] = useState<{ name: string; scopes: Record<string, boolean>; secret: string | null; assistant?: Assistant | null } | null>(null);
+  const [editing, setEditing] = useState<Key | null>(null);
   const [confirm, setConfirm] = useState<ConfirmCfg | null>(null);
 
   const { data: catalog } = useAsync(fetchCatalog, []);
@@ -29,7 +38,7 @@ export default function Apps() {
   ] : [];
   const applyPreset = (id: string) => {
     const p = presets.find((x) => x.id === id);
-    if (p) { setNewKey({ name: p.name, scopes: Object.fromEntries(p.scopes.map((x) => [x, true])), secret: null }); setShowDomains(true); }
+    if (p) { setNewKey({ name: p.name, scopes: Object.fromEntries(p.scopes.map((x) => [x, true])), secret: null, assistant: p.id === 'assistant' ? { mode: 'suggest', secretFields: [] } : null }); setShowDomains(true); }
   };
 
   useEffect(() => {
@@ -47,7 +56,7 @@ export default function Apps() {
 
   const create = async () => {
     if (!newKey) return;
-    const r = await run(() => post<{ secret: string }>('/api/keys', { name: newKey.name, scopes: Object.keys(newKey.scopes).filter((s) => newKey.scopes[s]) }));
+    const r = await run(() => post<{ secret: string }>('/api/keys', { name: newKey.name, scopes: Object.keys(newKey.scopes).filter((s) => newKey.scopes[s]), ...(newKey.assistant ? { assistant: newKey.assistant } : {}) }));
     if (r) { setNewKey({ ...newKey, secret: r.secret }); reload(); }
   };
   const revoke = (k: Key) => setConfirm({
@@ -71,7 +80,17 @@ export default function Apps() {
             <tbody>
               {data.items.map((k) => (
                 <tr key={k.id}>
-                  <td><div style={{ fontWeight: 600 }}>{k.name}</div><div className="text-muted" style={{ fontSize: 12 }}>{KIND[k.kind]} · created {shortDate(k.createdAt)}</div></td>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{k.name}</div>
+                    <div className="text-muted" style={{ fontSize: 12 }}>{k.assistant ? 'AI assistant' : KIND[k.kind]} · created {shortDate(k.createdAt)}</div>
+                    {k.assistant && (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                        <span className="tag tag-accent-2" style={{ fontSize: 11 }}>{modeLabel(k.assistant.mode)}</span>
+                        {k.assistant.secretFields.length > 0 && <span className="tag tag-accent" style={{ fontSize: 11 }}>{k.assistant.secretFields.length} secret {k.assistant.secretFields.length === 1 ? 'field' : 'fields'}</span>}
+                        <button className="btn btn-ghost" style={{ fontSize: 12, padding: '2px 8px' }} onClick={() => setEditing(k)}>Change</button>
+                      </div>
+                    )}
+                  </td>
                   <td className="mono" style={{ fontSize: 12.5 }}>{k.prefix}</td>
                   <td><div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{k.scopes.map((s) => <span key={s} className="tag tag-neutral mono">{s}</span>)}</div></td>
                   <td className="text-muted" style={{ fontSize: 13 }}>{k.current ? 'now' : ago(k.lastUsedAt)}</td>
@@ -115,10 +134,20 @@ export default function Apps() {
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {presets.map((p) => <button key={p.id} onClick={() => applyPreset(p.id)} style={{ border: `1px solid ${newKey.name === p.name ? 'var(--color-accent)' : 'var(--color-divider)'}`, background: newKey.name === p.name ? 'var(--color-accent-100)' : 'transparent', borderRadius: 999, padding: '5px 12px', font: 'inherit', fontSize: 13, cursor: 'pointer' }}>{p.label}</button>)}
                   </div>
-                  {newKey.name === 'AI assistant' && <div className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>Reads your profile and the {presets[0].scopes.length - 1} categories you’ve opened to AI. Secret details stay masked. Revoke it any time.</div>}
+                  {newKey.name === 'AI assistant' && <div className="text-muted" style={{ fontSize: 12, marginTop: 8 }}>Starts with your profile only: pick the categories it may read below. Secret details stay hidden unless you allow them. Revoke it any time.</div>}
                 </div>
               )}
               <div className="field"><label htmlFor="kn">Name</label><input id="kn" className="input" placeholder="Home Assistant" value={newKey.name} onChange={(e) => setNewKey({ ...newKey, name: e.target.value })} /></div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <Toggle on={!!newKey.assistant} onChange={() => setNewKey({ ...newKey, assistant: newKey.assistant ? null : { mode: 'suggest', secretFields: [] } })} label="This key is for an AI assistant" />
+                <span style={{ fontSize: 14 }}>This key is for an AI assistant</span>
+              </div>
+              {newKey.assistant && (
+                <AssistantChoices
+                  value={newKey.assistant} onChange={(assistant) => setNewKey({ ...newKey, assistant })}
+                  domains={(catalog ?? []).filter((d) => newKey.scopes['records:read'] || newKey.scopes[`${d.id}:read`])}
+                />
+              )}
               <div className="text-muted" style={{ fontSize: 12 }}>Scopes</div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {SCOPES.map((s) => {
@@ -142,8 +171,51 @@ export default function Apps() {
           )}
         </Dialog>
       )}
+      {editing?.assistant && <EditAssistant k={editing} domains={(catalog ?? []).filter((d) => editing.scopes.includes('records:read') || editing.scopes.includes(`${d.id}:read`))} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
       {confirm && <Confirm cfg={confirm} onClose={() => setConfirm(null)} />}
     </div>
+  );
+}
+
+/** What an assistant may change, and which secret details it may read. */
+function AssistantChoices({ value, onChange, domains }: { value: Assistant; onChange: (a: Assistant) => void; domains: Domain[] }) {
+  const secrets = domains.flatMap((d) => d.parts.filter((p) => p.sensitivity === 'secret' && !p.deprecated).map((p) => ({ id: `${d.id}.${p.key}`, label: `${d.label}: ${p.label}` })));
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {MODES.map(([m, label, text]) => (
+          <label key={m} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', padding: '8px 12px', borderRadius: 14, border: `1px solid ${value.mode === m ? 'var(--color-accent)' : 'var(--color-divider)'}`, background: value.mode === m ? 'var(--color-accent-100)' : 'transparent' }}>
+            <input type="radio" name="mode" checked={value.mode === m} onChange={() => onChange({ ...value, mode: m })} style={{ marginTop: 3 }} />
+            <span><span style={{ fontWeight: 600, fontSize: 14 }}>{label}</span><br /><span className="text-muted" style={{ fontSize: 12.5 }}>{text}</span></span>
+          </label>
+        ))}
+      </div>
+      <div className="text-muted" style={{ fontSize: 12 }}>New secret values it suggests always wait in Review. Pick the secret details it may <em>read</em>:</div>
+      {secrets.length ? (
+        <div style={{ display: 'grid', gap: 4, maxHeight: 160, overflow: 'auto' }}>
+          {secrets.map((f) => (
+            <label key={f.id} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={value.secretFields.includes(f.id)} onChange={(e) => onChange({ ...value, secretFields: e.target.checked ? [...value.secretFields, f.id] : value.secretFields.filter((x) => x !== f.id) })} />
+              {f.label}
+            </label>
+          ))}
+        </div>
+      ) : <div className="text-muted" style={{ fontSize: 12.5 }}>None of the categories it can read have secret details.</div>}
+    </div>
+  );
+}
+
+function EditAssistant({ k, domains, onClose, onSaved }: { k: Key; domains: Domain[]; onClose: () => void; onSaved: () => void }) {
+  const { run, busy } = useAction();
+  const [value, setValue] = useState<Assistant>(k.assistant!);
+  const save = async () => { if (await run(() => patch(`/api/keys/${k.id}`, { assistant: value }), 'Saved')) onSaved(); };
+  return (
+    <Dialog title={`What ${k.name} may do`} onClose={onClose} width={520} actions={<>
+      <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+      <button className="btn btn-primary" disabled={busy} onClick={save}>Save</button>
+    </>}>
+      <AssistantChoices value={value} onChange={setValue} domains={domains} />
+    </Dialog>
   );
 }
 
