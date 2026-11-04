@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { audit, ownerActor } from '../audit.js';
-import { bad, COOKIE, findKey, issueKey, notFound, requireOwner, SCOPES, type ApiKeyDoc } from '../auth.js';
+import { bad, bearer, COOKIE, findKey, HttpError, issueKey, notFound, requireOwner, SCOPES, type ApiKeyDoc } from '../auth.js';
 import { allFields, plainValue } from '../fields.js';
 import { canonicalUrl, getNode } from '../node.js';
 import { sendSigned, tokenHash, type ContactDoc, type InviteDoc, type LinkDoc, type PublicProfileDoc } from '../federation.js';
@@ -95,6 +95,13 @@ export default async function miscRoutes(app: FastifyInstance) {
       scopes: SCOPES,
       domainScopes: (await listDomains()).map((d) => ({ domain: d.id, label: d.label, read: `${d.id}:read`, write: `${d.id}:write` })),
     };
+  });
+
+  /** Who am I: any key can read its own name, scopes and expiry (an assistant checks what it may do). */
+  app.get('/api/keys/me', async (req) => {
+    const k = (await findKey(req.cookies[COOKIE.session], ['session'])) ?? (await findKey(bearer(req), ['session', 'app']));
+    if (!k) throw new HttpError(401, 'unauthenticated', 'Sign in required');
+    return { id: k._id, name: k.name, kind: k.kind, scopes: k.scopes, createdAt: k.createdAt, expiresAt: k.expiresAt, lastUsedAt: k.lastUsedAt };
   });
 
   app.post('/api/keys', async (req, reply) => {

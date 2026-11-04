@@ -60,7 +60,7 @@ export async function findKey(secret: string | undefined, kinds: ApiKeyDoc['kind
   return k;
 }
 
-const bearer = (req: FastifyRequest) => {
+export const bearer = (req: FastifyRequest) => {
   const h = req.headers.authorization;
   return h?.startsWith('Bearer ') ? h.slice(7).trim() : undefined;
 };

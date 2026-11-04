@@ -274,6 +274,33 @@ async function main() {
     await a.call('DELETE', `/api/data/education/${school.id}`);
     const noHist = await fetch(`${a.base}/api/data/employment/${job.id}/history`, { headers: { authorization: `Bearer ${(await a.call('POST', '/api/keys', { name: 'IDs only', scopes: ['ids:read'] })).secret}` } });
     ok(noHist.status === 403, "history needs the category's read scope");
+    // MCP: an assistant works through the same API with its key
+    const mcpKey = await a.call('POST', '/api/keys', { name: 'Muse', scopes: ['employment:read', 'employment:write', 'documents:read'] });
+    let rpcId = 0;
+    const mcp = async (method: string, params: object = {}, secret = mcpKey.secret) => {
+      const r = await fetch(`${a.base}/api/mcp`, { method: 'POST', headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }) });
+      return { status: r.status, body: r.status === 200 ? await r.json() : null };
+    };
+    const tool = async (name: string, args: object = {}) => (await mcp('tools/call', { name, arguments: args })).body.result;
+    const init = (await mcp('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'smoke', version: '1' } })).body.result;
+    ok(init.protocolVersion === '2025-06-18' && init.capabilities.tools && init.serverInfo.name === 'little-dipper', 'MCP initialize negotiates the protocol and offers tools');
+    const toolNames = (await mcp('tools/list')).body.result.tools.map((t: any) => t.name);
+    ok(['whoami', 'list_kinds', 'search_records', 'add_records', 'upload_document', 'upcoming_dates'].every((n) => toolNames.includes(n)) && !toolNames.some((n: string) => n.includes('delete')), 'MCP lists the assistant tools, and none deletes');
+    ok((await mcp('tools/list', {}, 'ldk_live_nope')).status === 401 && (await fetch(`${a.base}/api/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', origin: a.base, cookie: [...a.jar].map(([k, v]) => `${k}=${v}`).join('; ') }, body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' })).status === 401, 'MCP refuses a bad key and the browser session cookie');
+    const me = (await tool('whoami')).structuredContent;
+    ok(me.name === 'Muse' && me.scopes.includes('employment:write') && !me.scopes.includes('admin:*'), 'whoami tells the assistant its own name and scopes');
+    const kinds = (await tool('list_kinds')).structuredContent.kinds;
+    ok(kinds.length === 1 && kinds[0].kind === 'employment' && kinds[0].fields.some((f: any) => f.key === 'employer'), 'list_kinds shows only the kinds the key can read, with their fields');
+    ok((await tool('get_record', { kind: 'ids', id: 'x' })).isError, 'a kind outside the grant is a tool error, not a crash');
+    const found = (await tool('search_records', { query: 'alder' })).structuredContent.records;
+    ok(found.length === 1 && found[0].masked.includes('employeeId') && found[0].data.employeeId !== 'AS-0042', 'search_records finds the job, with secrets still masked');
+    const batch = (await tool('add_records', { kind: 'employment', records: [{ data: { employer: 'Globex', title: 'Analyst' }, validFrom: '2015-01', validTo: '2016-06' }, { data: { title: 'No employer' } }] })).structuredContent;
+    ok(batch.added === 1 && batch.failed === 1 && batch.results[1].error, 'add_records adds what it can and says what failed and why');
+    const globex = await a.call('GET', `/api/data/employment/${batch.results[0].id}`);
+    ok(globex.source.type === 'app' && globex.updatedByLabel === 'Muse', "the assistant's record is credited to it");
+    ok((await tool('add_records', { kind: 'employment', records: Array.from({ length: 51 }, () => ({ data: { employer: 'x' } })) })).isError, 'a batch over 50 is refused');
+    ok((await tool('upload_document', { name: 'x.pdf', mimeType: 'application/pdf', contentBase64: Buffer.from('%PDF-1.4').toString('base64') })).isError, 'uploading needs documents:write');
+    await a.call('DELETE', `/api/data/employment/${batch.results[0].id}`);
     // Sharing a domain with a connection
     await a.call('PUT', `/api/contacts/${cA.id}/grants`, { domains: { employment: { scope: 'current' } } });
     await a.call('PUT', `/api/contacts/${cA.id}/grants`, { domains: { ids: true } }, [409]);

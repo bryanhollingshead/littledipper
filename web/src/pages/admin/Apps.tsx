@@ -97,6 +97,15 @@ export default function Apps() {
               <div className="dialog-body">Copy this now. For your security it won't be shown again.</div>
               <div className="mono" style={{ fontSize: 13, background: 'var(--color-neutral-900)', color: 'var(--color-accent-300)', borderRadius: 16, padding: '12px 16px', overflowWrap: 'anywhere' }}>{newKey.secret}</div>
               <div className="text-muted" style={{ fontSize: 12 }}>Send it as <span className="mono">Authorization: Bearer …</span></div>
+              <div className="card" style={{ padding: '14px 16px', gap: 6, marginTop: 6 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Connecting an AI assistant?</div>
+                <div style={{ fontSize: 13 }}>Give it this address along with the key:</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span className="mono" style={{ fontSize: 12.5, overflowWrap: 'anywhere' }}>{`${window.location.origin}/api/mcp`}</span>
+                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { await copy(`${window.location.origin}/api/mcp`); toast('Address copied'); }}>Copy</button>
+                </div>
+                <div className="text-muted" style={{ fontSize: 12 }}>Enter the key on the assistant’s own connection page, never in a chat: anything in a chat can end up in its history.</div>
+              </div>
             </>
           ) : (
             <>

@@ -121,6 +121,7 @@ The capability list never describes the owner's data: not which domains hold rec
 | `backups.device` | Backups can be downloaded to the owner's device |
 | `recovery-kit` | `POST /api/node/recovery-kit` produces a kit |
 | `restore` | A fresh node can be restored from a kit and a backup at `POST /api/node/claim/restore` |
+| `mcp` | An MCP server (Streamable HTTP, stateless) at the descriptor's `mcp` address, for AI assistants using an app key |
 
 The list lives in `CAPABILITIES` in `server/src/node.ts`.
 

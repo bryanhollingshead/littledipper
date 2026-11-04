@@ -71,8 +71,9 @@ function catalogEntry(d: DomainDef, sum: Summary) {
 export default async function domainRoutes(app: FastifyInstance) {
   // ── catalog ──────────────────────────────────────────────────────────
   app.get('/api/catalog', async (req) => {
-    const p = await requireOwner(req, ['records:read', 'owner:read']);
+    // Any key that can read a kind sees that kind's entry (an assistant learns its fields here).
     const domains = await listDomains();
+    const p = await requireOwner(req, ['records:read', 'owner:read', ...domains.map((d) => `${d.id}:read`)]);
     const visible = p.key.scopes.includes('admin:*') || p.key.scopes.includes('records:read')
       ? domains : domains.filter((d) => p.key.scopes.includes(`${d.id}:read`));
     const sums = await summarize(visible);

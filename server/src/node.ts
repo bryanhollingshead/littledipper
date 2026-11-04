@@ -63,6 +63,7 @@ export const CAPABILITIES = [
   'calendar', 'calendar.share',
   'documents', 'documents.share-links', 'copies', 'messages',
   'address-change', 'backups.device', 'recovery-kit', 'restore',
+  'mcp',
 ] as const;
 
 export function descriptor(n: NodeDoc, displayName: string | null, connectRequests: string) {
@@ -79,6 +80,7 @@ export function descriptor(n: NodeDoc, displayName: string | null, connectReques
     profile: `${base}/`,
     api: `${base}/api`,
     federation: `${base}/peer`,
+    mcp: `${base}/api/mcp`,
     connectRequests,
     claimed: n.claimed,
     capabilities: [...CAPABILITIES],
