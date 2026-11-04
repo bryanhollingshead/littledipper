@@ -7,7 +7,8 @@
  * Auth: an app key as a Bearer token. The browser session cookie is never accepted here.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { bearer, findKey } from '../auth.js';
+import { bearer, findKey, type ApiKeyDoc } from '../auth.js';
+import { ctx } from '../ctx.js';
 import { VERSION } from '../config.js';
 import { MAX_FILE_BYTES } from '../files.js';
 import { canonicalUrl, getNode } from '../node.js';
@@ -231,7 +232,7 @@ const toolList = TOOLS.map(({ name, title, description, inputSchema, annotations
 type RpcMessage = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Json };
 const rpcError = (id: RpcMessage['id'], code: number, message: string) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
 
-async function handle(msg: RpcMessage, call: Call) {
+async function handle(msg: RpcMessage, call: Call, count: (k: 'reads' | 'writes') => Promise<void>) {
   const id = msg.id;
   switch (msg.method) {
     case 'initialize': {
@@ -253,6 +254,7 @@ async function handle(msg: RpcMessage, call: Call) {
       if (!tool) return rpcError(id, -32602, `Unknown tool: ${msg.params?.name}`);
       try {
         const out = await tool.run((msg.params?.arguments as Json) || {}, call);
+        await count(tool.annotations?.readOnlyHint ? 'reads' : 'writes');
         return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify(out, null, 2) }], structuredContent: out, isError: false } };
       } catch (e) {
         if (!(e instanceof ToolError)) throw e;
@@ -274,7 +276,8 @@ export default async function mcpRoutes(app: FastifyInstance) {
   app.post('/api/mcp', { bodyLimit: Math.ceil(MAX_FILE_BYTES * 1.4) + 64 * 1024 }, async (req: FastifyRequest, reply: FastifyReply) => {
     cors(reply);
     const token = bearer(req);
-    if (!(await findKey(token, ['app']))) {
+    const key = await findKey(token, ['app']);
+    if (!key) {
       // Tells an assistant platform where to start OAuth (RFC 9728).
       const meta = `${canonicalUrl(await getNode())}/.well-known/oauth-protected-resource`;
       return reply.code(401).header('www-authenticate', `Bearer resource_metadata="${meta}"`).send({ code: 'unauthenticated', message: 'Connect from your assistant, or with an app key from Little Dipper (Apps and access).' });
@@ -291,6 +294,14 @@ export default async function mcpRoutes(app: FastifyInstance) {
       return { status: r.statusCode, body: parsed };
     };
 
+    // Tally this month's use for the owner's digest ("This month Muse read 40 and changed 6").
+    const countUse = async (k: 'reads' | 'writes') => {
+      const month = new Date().toISOString().slice(0, 7);
+      const fresh = await ctx.store.get<ApiKeyDoc>('apiKeys', key._id);
+      const u = fresh?.usage?.month === month ? fresh.usage : { month, reads: 0, writes: 0 };
+      await ctx.store.update('apiKeys', key._id, { usage: { ...u, [k]: u[k] + 1 } });
+    };
+
     const body = req.body as RpcMessage | RpcMessage[] | undefined;
     if (!body || typeof body !== 'object') return reply.code(400).send(rpcError(null, -32700, 'Parse error'));
     const msgs = Array.isArray(body) ? body : [body];
@@ -298,7 +309,7 @@ export default async function mcpRoutes(app: FastifyInstance) {
     for (const m of msgs) {
       // Notifications (no id) and responses get no reply.
       if (m.id === undefined || !m.method) continue;
-      out.push(await handle(m, call));
+      out.push(await handle(m, call, countUse));
     }
     if (!out.length) return reply.code(202).send();
     return reply.type('application/json').send(Array.isArray(body) ? out : out[0]);

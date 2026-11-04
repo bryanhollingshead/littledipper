@@ -18,7 +18,8 @@ const modeLabel = (m: Mode) => MODES.find(([k]) => k === m)![1];
 const KIND = { session: 'Owner session', peer: 'Peer token', app: 'App key' };
 
 export default function Apps() {
-  const { tech } = useAdmin();
+  const { tech, node } = useAdmin();
+  const mcpAddress = `${node.address}/api/mcp`;
   const toast = useToast();
   const { run, busy } = useAction();
   const [params, setParams] = useSearchParams();
@@ -42,6 +43,11 @@ export default function Apps() {
     if (p) { setNewKey({ name: p.name, scopes: Object.fromEntries(p.scopes.map((x) => [x, true])), secret: null, assistant: p.id === 'assistant' ? { mode: 'suggest', secretFields: [] } : null }); setShowDomains(true); }
   };
 
+  useEffect(() => {
+    const id = params.get('assistant');
+    const k = id && data?.items.find((x) => x.id === id);
+    if (k) { setActivity(k); setParams({}, { replace: true }); }
+  }, [params, data, setParams]);
   useEffect(() => {
     if (params.get('new') || params.get('preset')) {
       setNewKey({ name: '', scopes: { 'owner:read': true }, secret: null });
@@ -78,6 +84,7 @@ export default function Apps() {
         <div><h1>Apps and access</h1><p className="text-muted" style={{ margin: 0 }}>Keys let apps and services use your data. Each key can only do what you allow, and you can revoke it any time.</p></div>
         <button className="btn btn-primary" onClick={() => setNewKey({ name: '', scopes: { 'owner:read': true }, secret: null })}>New API key</button>
       </div>
+      <ConnectAssistant />
       <h4 style={{ marginTop: 28 }}>Keys</h4>
       {!data ? <Loading /> : (
         <div style={{ overflowX: 'auto' }}>
@@ -127,8 +134,8 @@ export default function Apps() {
                 <div style={{ fontSize: 13, fontWeight: 600 }}>Connecting an AI assistant?</div>
                 <div style={{ fontSize: 13 }}>Give it this address along with the key:</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span className="mono" style={{ fontSize: 12.5, overflowWrap: 'anywhere' }}>{`${window.location.origin}/api/mcp`}</span>
-                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { await copy(`${window.location.origin}/api/mcp`); toast('Address copied'); }}>Copy</button>
+                  <span className="mono" style={{ fontSize: 12.5, overflowWrap: 'anywhere' }}>{mcpAddress}</span>
+                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { await copy(mcpAddress); toast('Address copied'); }}>Copy</button>
                 </div>
                 <div className="text-muted" style={{ fontSize: 12 }}>Enter the key on the assistant’s own connection page, never in a chat: anything in a chat can end up in its history.</div>
               </div>
@@ -181,6 +188,49 @@ export default function Apps() {
       {editing?.assistant && <EditAssistant k={editing} domains={(catalog ?? []).filter((d) => editing.scopes.includes('records:read') || editing.scopes.includes(`${d.id}:read`))} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
       {activity && <AssistantActivity k={activity} onClose={() => setActivity(null)} />}
       {confirm && <Confirm cfg={confirm} onClose={() => setConfirm(null)} />}
+    </div>
+  );
+}
+
+/** How to connect each assistant. "Tested" only once someone has run the six phase-1 jobs with it. */
+const ASSISTANTS: { name: string; status: 'Tested' | 'Should work'; how: string }[] = [
+  { name: 'Muse', status: 'Should work', how: 'Ask Muse to connect to your Little Dipper and give it the address below. Muse sends you a link: open it, and your Little Dipper asks what Muse may do.' },
+  { name: 'Claude', status: 'Should work', how: 'In Claude’s settings, add a custom connector and paste the address below. Claude opens your Little Dipper so you can approve it.' },
+  { name: 'ChatGPT', status: 'Should work', how: 'In ChatGPT’s settings, add a connector (it may need developer mode turned on) and paste the address below. ChatGPT opens your Little Dipper so you can approve it.' },
+];
+
+function ConnectAssistant() {
+  const toast = useToast();
+  const { node } = useAdmin();
+  const [open, setOpen] = useState<string | null>(null);
+  // The node's own address, not the browser's: assistants must reach the server, and it's the one OAuth uses.
+  const mcp = `${node.address}/api/mcp`;
+  return (
+    <div className="card" style={{ marginTop: 24, padding: '18px 22px', gap: 12 }}>
+      <div>
+        <div style={{ fontWeight: 600 }}>Connect an AI assistant</div>
+        <div className="text-muted" style={{ fontSize: 13.5 }}>It asks you here, on your Little Dipper, what it may see and do. You can watch what it does, undo it, and disconnect it any time.</div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {ASSISTANTS.map((x) => (
+          <button key={x.name} className={`btn ${open === x.name ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 13 }} onClick={() => setOpen(open === x.name ? null : x.name)}>
+            {x.name} <span style={{ opacity: 0.7, fontWeight: 400, marginLeft: 6 }}>{x.status}</span>
+          </button>
+        ))}
+        <button className={`btn ${open === 'other' ? 'btn-primary' : 'btn-secondary'}`} style={{ fontSize: 13 }} onClick={() => setOpen(open === 'other' ? null : 'other')}>Another assistant</button>
+      </div>
+      {open && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ fontSize: 14 }}>{ASSISTANTS.find((x) => x.name === open)?.how ?? 'Any assistant that supports MCP connectors can connect with this address. If it can’t open your Little Dipper to ask you, create a key below for it instead.'}</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="mono" style={{ fontSize: 13, background: 'var(--color-neutral-100)', padding: '6px 12px', borderRadius: 999, overflowWrap: 'anywhere' }}>{mcp}</span>
+            <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={async () => { await copy(mcp); toast('Address copied'); }}>Copy</button>
+          </div>
+          {open !== 'other' && ASSISTANTS.find((x) => x.name === open)?.status === 'Should work' && (
+            <div className="text-muted" style={{ fontSize: 12 }}>“Should work” means it follows the standard but nobody has tried every step with it yet. Tell us how it goes.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

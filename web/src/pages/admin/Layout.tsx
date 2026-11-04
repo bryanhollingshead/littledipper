@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { addr, ApiError, copy, get, initials, patch, post, type NodeInfo, type Owner } from '../../api';
 import { Loading, useToast } from '../../ui';
@@ -28,6 +28,34 @@ const DOCS: [string, string, IconName][] = [['/admin/reference/model', 'Data mod
 
 const Badge = ({ n }: { n: number }) => <span className="nav-badge">{n}</span>;
 
+type Notice = { id: string; kind: string; title: string; text: string; href: string; at: string };
+
+/** What to know about while you weren't looking: Review waiting, assistants' months, ended connections. */
+function NoticePanel({ items, left, onClose, onGo, onDismiss }: { items: Notice[]; left: number; onClose: () => void; onGo: (href: string) => void; onDismiss: (id: string) => void }) {
+  useEffect(() => {
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [onClose]);
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 40 }} aria-hidden />
+      <div role="dialog" aria-label="Notifications" className="card" style={{ position: 'fixed', top: 16, left, width: 'min(380px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 32px)', overflow: 'auto', zIndex: 41, padding: '16px 18px', gap: 10, boxShadow: '0 12px 40px rgba(0,0,0,.12)' }}>
+        <div style={{ fontWeight: 600 }}>Notifications</div>
+        {!items.length ? <div className="text-muted" style={{ fontSize: 13.5 }}>You’re all caught up.</div> : items.map((n) => (
+          <div key={n.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', borderRadius: 14, background: 'var(--color-neutral-100)' }}>
+            <button type="button" className="bare" onClick={() => onGo(n.href)} style={{ all: 'unset', cursor: 'pointer', flex: 1, display: 'grid', gap: 2 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 600 }}>{n.title}</span>
+              <span className="text-muted" style={{ fontSize: 12.5 }}>{n.text}</span>
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => onDismiss(n.id)} aria-label="Dismiss" title="Dismiss" style={{ fontSize: 14, padding: '0 8px' }}>×</button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 /** Whether the sidebar is folded to icons: a per-device convenience, so browser storage. */
 const RAIL_KEY = 'ld.sidebar.rail';
 function readRail() {
@@ -44,6 +72,9 @@ export default function AdminLayout() {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [inboxDocs, setInboxDocs] = useState(0);
   const [pendingReview, setPendingReview] = useState(0);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [noticesOpen, setNoticesOpen] = useState(false);
+  const asideRef = useRef<HTMLElement>(null);
   const [authError, setAuthError] = useState(false);
   const [n, setN] = useState(0);
   const [rail, setRail] = useState(readRail);
@@ -54,7 +85,7 @@ export default function AdminLayout() {
 
   const load = useCallback(async () => {
     try {
-      const [o, nd, reqs, unread, docs, reviews] = await Promise.all([get<Owner>('/api/owner'), get<NodeInfo>('/api/node'), get('/api/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/messages/unread'), get<{ items: unknown[] }>('/api/documents?status=inbox'), get<{ items: unknown[] }>('/api/reviews')]);
+      const [o, nd, reqs, unread, docs, reviews, ns] = await Promise.all([get<Owner>('/api/owner'), get<NodeInfo>('/api/node'), get('/api/federation/requests?status=pending&direction=in'), get<{ count: number }>('/api/messages/unread'), get<{ items: unknown[] }>('/api/documents?status=inbox'), get<{ items: unknown[] }>('/api/reviews'), get<{ items: Notice[] }>('/api/notifications')]);
       setOwner(o);
       setNode(nd);
       // Stranger requests under "Anyone" wait quietly: no badge.
@@ -62,6 +93,7 @@ export default function AdminLayout() {
       setUnreadMessages(unread.count);
       setInboxDocs(docs.items.length);
       setPendingReview(reviews.items.length);
+      setNotices(ns.items);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setAuthError(true);
     }
@@ -94,7 +126,7 @@ export default function AdminLayout() {
   return (
     <AdminCtx.Provider value={{ owner, node, tech, setTech, pendingIn, unreadMessages, inboxDocs, pendingReview, refresh: () => setN((x) => x + 1) }}>
       <div className="shell">
-        <aside className="sidebar" aria-label="Main" data-rail={rail ? '1' : '0'}>
+        <aside ref={asideRef} className="sidebar" aria-label="Main" data-rail={rail ? '1' : '0'}>
           <div className="side-head">
             <span className="side-avatar" title={rail ? owner.displayName : undefined}>{initials(owner.displayName)}</span>
             <span className="side-name">{owner.displayName}</span>
@@ -107,6 +139,13 @@ export default function AdminLayout() {
             <button type="button" title={`${node.id} · click to copy`} onClick={async () => toast((await copy(node.id)) ? 'Node ID copied' : node.id)}
               style={{ all: 'unset', cursor: 'pointer', fontSize: 11, opacity: 0.75 }}>{node.id.slice(0, 8)}…{node.id.slice(-4)}</button>
           </div>
+          <button type="button" className="nav-pill bare" onClick={() => setNoticesOpen(!noticesOpen)} aria-expanded={noticesOpen}
+            title={rail ? `Notifications${notices.length ? ` (${notices.length})` : ''}` : undefined} aria-label={`Notifications${notices.length ? ` (${notices.length})` : ''}`}
+            style={{ width: '100%', textAlign: 'left', cursor: 'pointer', font: 'inherit' }}>
+            <Icon name="bell" className="nav-ico" />
+            <span className="nav-label">Notifications</span>
+            {notices.length > 0 && <Badge n={notices.length} />}
+          </button>
           {NAV.map(([to, label, icon]) => {
             const count = to === '/admin/contacts' ? pendingIn : to === '/admin/messages' ? unreadMessages : to === '/admin/documents' ? inboxDocs : to === '/admin/review' ? pendingReview : 0;
             return (
@@ -137,6 +176,14 @@ export default function AdminLayout() {
             </button>
           </div>
         </aside>
+        {noticesOpen && (
+          <NoticePanel
+            items={notices} left={(asideRef.current?.getBoundingClientRect().right ?? 260) + 8}
+            onClose={() => setNoticesOpen(false)}
+            onGo={(href) => { setNoticesOpen(false); nav(href); }}
+            onDismiss={async (id) => { await post(`/api/notifications/${encodeURIComponent(id)}/dismiss`); setN((x) => x + 1); }}
+          />
+        )}
         <main className="main">
           <Outlet />
         </main>

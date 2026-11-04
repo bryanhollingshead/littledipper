@@ -28,6 +28,8 @@ export type ApiKeyDoc = Doc & {
   assistant?: AssistantSettings;
   /** Set when the key is an OAuth connection: the registered client it belongs to. Its own secret is never handed out. */
   oauth?: { clientId: string };
+  /** What an assistant did this month through MCP, for the owner's digest. */
+  usage?: { month: string; reads: number; writes: number };
 };
 
 /**

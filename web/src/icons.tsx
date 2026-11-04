@@ -55,6 +55,10 @@ const PATHS: Record<string, ReactNode> = {
     <circle {...N} cx="9" cy="11" r="2.2" />
     <path {...N} d="M5.6 16.5c.6-1.5 1.9-2.4 3.4-2.4s2.8.9 3.4 2.4M14.5 10.5h3.5M14.5 14h2.5" />
   </>,
+  bell: <>
+    <path {...F} d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2H4.5z" />
+    <path {...N} d="M10 20.5a2.2 2.2 0 0 0 4 0" />
+  </>,
   review: <>
     <rect {...F} x="4" y="4" width="16" height="16" rx="3" />
     <path {...N} d="m8.5 12.2 2.4 2.4 4.8-5" strokeWidth={2} />

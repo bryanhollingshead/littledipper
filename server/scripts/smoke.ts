@@ -407,6 +407,13 @@ async function main() {
     const reader = await a.call('POST', '/api/oauth/authorize', { ...authQ, approve: true, preset: 'everything', assistant: { mode: 'answer', secretFields: [] }, length: 'hour' });
     const rtok = (await oauthToken({ grant_type: 'authorization_code', code: new URL(reader.redirect).searchParams.get('code')!, client_id: oaClient.client_id, redirect_uri: authQ.redirect_uri, code_verifier: verifier })).body;
     ok(rtok.scope === 'records:read documents:read' && rtok.expires_in <= 1800, 'an answer-only assistant gets read scopes only');
+    // Notifications: background work has somewhere to report
+    const notes = (await a.call('GET', '/api/notifications')).items;
+    const reviewNote = notes.find((n: any) => n.kind === 'review');
+    ok(reviewNote && /needs? your approval/.test(reviewNote.title) && reviewNote.href === '/admin/review', 'a suggestion waiting in Review shows up as a notification');
+    ok(notes.some((n: any) => n.kind === 'digest' && n.title.startsWith('This month Muse')), "a connected assistant's month shows up as a digest");
+    await a.call('POST', `/api/notifications/${encodeURIComponent(reviewNote.id)}/dismiss`);
+    ok(!(await a.call('GET', '/api/notifications')).items.some((n: any) => n.id === reviewNote.id), 'a dismissed notification stays hidden');
     for (const r of (await a.call('GET', '/api/reviews')).items) await a.call('POST', `/api/reviews/${r.id}/reject`);
     // Sharing a domain with a connection
     await a.call('PUT', `/api/contacts/${cA.id}/grants`, { domains: { employment: { scope: 'current' } } });
