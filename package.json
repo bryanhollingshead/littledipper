@@ -1,6 +1,6 @@
 {
   "name": "little-dipper",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "license": "AGPL-3.0-or-later",
   "description": "Little Dipper: a self-hosted personal data store. Your data, not your definition.",
