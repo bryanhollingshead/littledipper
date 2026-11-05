@@ -29,7 +29,7 @@ async function notices(): Promise<Notice[]> {
     out.push({
       id: `review:${rs[0]._id}`, kind: 'review', at: rs[0].createdAt, href: '/admin/review',
       title: `${rs[0].by} made ${n === 1 ? 'a change' : `${n} changes`} that ${n === 1 ? 'needs' : 'need'} your approval`,
-      text: rs.some((r) => r.reason === 'secret') ? 'Including secret details, which always wait for you.' : 'Nothing is saved until you approve it.',
+      text: rs.some((r) => r.reason === 'secret' || r.reason === 'identity') ? 'Including secret or identity details, which always wait for you.' : 'Nothing is saved until you approve it.',
     });
   }
 

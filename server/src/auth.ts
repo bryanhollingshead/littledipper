@@ -34,7 +34,7 @@ export type ApiKeyDoc = Doc & {
 
 /**
  * An assistant's mode: answer (read only), suggest (writes wait in Review) or make (writes go straight in,
- * except secret values, which always wait in Review). secretFields lists "{domain}.{part}" it may read.
+ * except secret values and core identity, which always wait in Review). secretFields lists "{domain}.{part}" it may read.
  */
 export type AssistantMode = 'answer' | 'suggest' | 'make';
 export const ASSISTANT_MODES: AssistantMode[] = ['answer', 'suggest', 'make'];
@@ -95,8 +95,29 @@ export const bearer = (req: FastifyRequest) => {
 
 export type Principal = { key: ApiKeyDoc; isSession: boolean };
 
-/** Owner access: the browser session (admin:*) or an app key carrying the scope. */
-export async function requireOwner(req: FastifyRequest, scope?: string | string[]): Promise<Principal> {
+const isWriteScope = (s: string) => s.endsWith(':write') || s === 'keys:manage';
+
+/** Only the owner manages keys: a key that could mint keys would let an assistant escape its own mode. */
+export function checkAssistantScopes(scopes: string[]) {
+  if (scopes.includes('keys:manage')) throw bad('assistant_scope', 'An assistant can’t be given keys:manage. Only you manage keys and connections.');
+}
+
+/**
+ * The assistant's mode, enforced for every route in one place. A write needs `reviewable` to go ahead in suggest
+ * mode: those routes send the change to Review themselves. Every other write waits for Review to support it.
+ */
+function checkAssistantMode(a: AssistantSettings, wanted: string[], reviewable: boolean) {
+  if (wanted.includes('keys:manage')) throw new HttpError(403, 'owner_only', 'Only the owner manages keys and connections.');
+  if (!wanted.length || !wanted.every(isWriteScope)) return;
+  if (a.mode === 'answer') throw new HttpError(403, 'read_only', 'Your owner set you to answer questions only. You can read, but not change anything.');
+  if (a.mode === 'suggest' && !reviewable) throw new HttpError(403, 'needs_review', 'Your owner set you to suggest changes, and this kind of change can’t wait in Review yet. Tell your owner what you’d change.');
+}
+
+/**
+ * Owner access: the browser session (admin:*) or an app key carrying the scope. An assistant's key is also held to
+ * its mode; pass `reviewable` only from routes that send an assistant's changes to Review.
+ */
+export async function requireOwner(req: FastifyRequest, scope?: string | string[], opts: { reviewable?: boolean } = {}): Promise<Principal> {
   const cookieSecret = req.cookies[COOKIE.session];
   let key = await findKey(cookieSecret, ['session']);
   let isSession = !!key;
@@ -108,6 +129,7 @@ export async function requireOwner(req: FastifyRequest, scope?: string | string[
   const wanted = scope === undefined ? [] : Array.isArray(scope) ? scope : [scope];
   const ok = key.scopes.includes('admin:*') || wanted.some((s) => key.scopes.includes(s));
   if (!ok) throw new HttpError(403, 'insufficient_scope', wanted.length ? `This key needs ${wanted.join(' or ')}` : 'Owner session required');
+  if (key.assistant) checkAssistantMode(key.assistant, wanted, !!opts.reviewable);
   return { key, isSession };
 }
 

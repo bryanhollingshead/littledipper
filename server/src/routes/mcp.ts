@@ -17,7 +17,7 @@ const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const MAX_BATCH = 50;
 
 const INSTRUCTIONS = `This is the owner's Little Dipper: their records (addresses, jobs, IDs, insurance, vehicles and more, each with when it applied), their documents, and the dates that matter.
-- Call whoami first to see which kinds of records your key can read or change, and your mode: answer (read only), suggest (your changes wait for the owner to approve them) or make (your changes are saved, except secret values, which always wait for approval).
+- Call whoami first to see which kinds of records your key can read or change, and your mode: answer (read only), suggest (your changes wait for the owner to approve them) or make (your changes are saved, except secret values and core identity, which always wait for approval: legal names, citizenship, IDs, the current address, email and phone). In suggest mode, documents you upload wait unfiled in the owner's inbox.
 - When a change comes back "pending_review", tell the owner it's waiting for them in Review. Don't say it's saved. list_review_items shows what's still waiting.
 - Call list_kinds to learn each kind's fields before adding or updating records. Use the field keys it gives you.
 - Dated kinds keep history: when something ends (a move, a job change), set validTo on the old record and add a new one, rather than overwriting it.

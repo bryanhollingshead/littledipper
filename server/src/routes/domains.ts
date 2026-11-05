@@ -6,7 +6,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ctx } from '../ctx.js';
 import { audit, ownerActor } from '../audit.js';
 import { bad, HttpError, notFound, requireOwner, requireSession, type ApiKeyDoc } from '../auth.js';
-import { pendingReply, propose, reviewInput, type ReviewDoc } from '../reviews.js';
+import { isIdentityChange, pendingReply, propose, reviewInput, type ReviewDoc } from '../reviews.js';
 import { mask } from '../fields.js';
 import { undoOnRecord } from '../undo.js';
 import { contactsSharing, nudgePeers } from '../contacts.js';
@@ -200,8 +200,8 @@ export default async function domainRoutes(app: FastifyInstance) {
   const ctxFor = async (req: FastifyRequest, write: boolean) => {
     const { domain, id } = req.params as { domain: string; id?: string };
     const d = await domainOr404(domain);
-    const p = await requireOwner(req, write ? writeScopes(d.id) : readScopes(d.id));
-    if (write && p.key.assistant?.mode === 'answer') throw new HttpError(403, 'read_only', 'Your owner set you to answer questions only. You can read, but not change anything.');
+    // Record writes are reviewable: an assistant's change goes to Review when its mode or the change calls for it.
+    const p = await requireOwner(req, write ? writeScopes(d.id) : readScopes(d.id), { reviewable: write });
     const by: Actor = { type: p.isSession ? 'owner' : 'app', id: p.key._id };
     return { d, p, id, by };
   };
@@ -225,7 +225,7 @@ export default async function domainRoutes(app: FastifyInstance) {
     if (a) {
       // Check it now, so the assistant hears about a mistake straight away rather than at approval.
       await buildRecord(d, input, null, by);
-      const reason = a.mode === 'suggest' ? 'suggest' : secretKeys(d, input).length ? 'secret' : null;
+      const reason = a.mode === 'suggest' ? 'suggest' : isIdentityChange(d, input, null) ? 'identity' : secretKeys(d, input).length ? 'secret' : null;
       if (reason) { reply.code(202); return pendingReply(await proposeChange(p, d, null, input, reason)); }
     }
     reply.code(201);
@@ -248,7 +248,8 @@ export default async function domainRoutes(app: FastifyInstance) {
     if (a) {
       await buildRecord(d, input, existing, by);
       if (a.mode === 'suggest') { reply.code(202); return pendingReply(await proposeChange(p, d, existing._id, input, 'suggest')); }
-      // Make changes: everything goes in except secret values, which wait in Review.
+      if (isIdentityChange(d, input, existing)) { reply.code(202); return pendingReply(await proposeChange(p, d, existing._id, input, 'identity')); }
+      // Make changes: everything else goes in except secret values, which wait in Review.
       const secrets = secretKeys(d, input);
       if (secrets.length) {
         const review = await proposeChange(p, d, existing._id, { data: Object.fromEntries(secrets.map((k) => [k, input.data![k]])) }, 'secret');

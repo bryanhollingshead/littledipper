@@ -11,8 +11,8 @@ type Assistant = { mode: Mode; secretFields: string[] };
 type Key = { id: string; name: string; kind: 'session' | 'app' | 'peer'; prefix: string; scopes: string[]; createdAt: string; lastUsedAt: string | null; current: boolean; assistant: Assistant | null };
 const MODES: [Mode, string, string][] = [
   ['answer', 'Answer questions', 'Reads what you allow. Changes nothing.'],
-  ['suggest', 'Suggest changes', 'Its changes wait in Review until you approve them.'],
-  ['make', 'Make changes', 'Its changes are saved straight away. You can see and undo them.'],
+  ['suggest', 'Suggest changes', 'Its changes wait in Review until you approve them. Documents it adds wait in your inbox for you to file.'],
+  ['make', 'Make changes', 'Its changes are saved straight away. You can see and undo them. Changes to your identity, current address, email and phone still wait for you.'],
 ];
 const modeLabel = (m: Mode) => MODES.find(([k]) => k === m)![1];
 const KIND = { session: 'Owner session', peer: 'Peer token', app: 'App key' };
@@ -296,7 +296,7 @@ function AssistantChoices({ value, onChange, domains }: { value: Assistant; onCh
           </label>
         ))}
       </div>
-      <div className="text-muted" style={{ fontSize: 12 }}>New secret values it suggests always wait in Review. Pick the secret details it may <em>read</em>:</div>
+      <div className="text-muted" style={{ fontSize: 12 }}>Secret values and identity details it suggests always wait in Review, whatever its mode. Pick the secret details it may <em>read</em>:</div>
       {secrets.length ? (
         <div style={{ display: 'grid', gap: 4, maxHeight: 160, overflow: 'auto' }}>
           {secrets.map((f) => (

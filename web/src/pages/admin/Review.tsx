@@ -7,7 +7,7 @@ import { useAdmin } from './Layout';
 type Change = { key: string; label: string; secret: boolean; to: unknown; from?: unknown };
 type Item = {
   id: string; by: string; domain: string; domainLabel: string; recordId: string | null; recordTitle: string | null; recordGone: boolean;
-  action: 'create' | 'update'; reason: 'suggest' | 'secret'; status: 'pending' | 'approved' | 'rejected'; createdAt: string; decidedAt: string | null;
+  action: 'create' | 'update'; reason: 'suggest' | 'secret' | 'identity'; status: 'pending' | 'approved' | 'rejected'; createdAt: string; decidedAt: string | null;
   resultId: string | null; changes: Change[];
 };
 
@@ -58,7 +58,7 @@ export default function Review() {
                     {it.by} suggests {it.action === 'create' ? `a new entry in ${it.domainLabel}` : <>a change to {it.recordTitle ?? 'an entry'} <span className="text-muted" style={{ fontWeight: 400 }}>({it.domainLabel})</span></>}
                   </div>
                   <div className="text-muted" style={{ fontSize: 12 }}>
-                    {ago(it.createdAt)}{it.reason === 'secret' ? ' · secret details always wait for you' : ''}
+                    {ago(it.createdAt)}{it.reason === 'secret' ? ' · secret details always wait for you' : it.reason === 'identity' ? ' · identity details always wait for you' : ''}
                   </div>
                 </div>
                 {it.status !== 'pending' && <span className={`tag ${it.status === 'approved' ? 'tag-accent-2' : 'tag-neutral'}`}>{it.status === 'approved' ? 'Approved' : 'Turned down'}</span>}

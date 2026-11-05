@@ -23,7 +23,7 @@ type ShareDoc = { _id: string; documentId: string; tokenHash: string; expiresAt:
 const SHARE_HOURS = [1, 24, 24 * 7, 24 * 30];
 
 const sourceOf = (p: Principal): Source => ({ type: p.isSession ? 'owner' : 'app', id: p.key._id });
-const who = (p: Principal) => (p.isSession ? 'You' : 'An app');
+const who = (p: Principal) => (p.isSession ? 'You' : p.key.name);
 
 function bodyBytes(req: FastifyRequest) {
   const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
@@ -63,10 +63,14 @@ export default async function documentRoutes(app: FastifyInstance) {
   // Raw bytes for these types, only in this plugin. Anything else is refused before it's read.
   app.addContentTypeParser(FILE_TYPES, { parseAs: 'buffer', bodyLimit: MAX_FILE_BYTES }, (_req, body, done) => done(null, body));
 
-  const docFor = async (req: FastifyRequest, write: boolean) => {
+  const docFor = async (req: FastifyRequest, write: boolean, opts: { reviewable?: boolean } = {}) => {
     const doc = await documentOr404((req.params as { id: string }).id);
-    const p = await requireOwner(req, docScopes(doc, write));
+    const p = await requireOwner(req, docScopes(doc, write), opts);
     return { doc, p };
+  };
+  // Only the owner deletes, as with records: an assistant tells the owner what to remove.
+  const noAssistant = (p: Principal) => {
+    if (p.key.assistant) throw new HttpError(403, 'owner_only', 'Only the owner deletes. Tell them what to remove.');
   };
 
   // ── library ──────────────────────────────────────────────────────────
@@ -93,14 +97,17 @@ export default async function documentRoutes(app: FastifyInstance) {
   app.post('/api/documents', async (req, reply) => {
     const q = req.query as { name?: string; title?: string; kind?: string; status?: string; date?: string; link?: string };
     const links = parseLink(q.link);
-    const p = await requireOwner(req, docScopes({ links }, true));
+    const p = await requireOwner(req, docScopes({ links }, true), { reviewable: true });
+    // Suggest mode: the document waits in the owner's inbox, unfiled. The owner decides where it goes.
+    const waits = p.key.assistant?.mode === 'suggest';
     const { type, data } = bodyBytes(req);
     const name = String(q.name || 'document');
     const page = await saveFile(name, type, data, sourceOf(p));
-    const doc = await createDocument({ title: q.title || name.replace(/\.\w+$/, ''), kind: q.kind, status: q.status, date: q.date, links, page, from: sourceOf(p) });
-    await audit({ actor: ownerActor(p.key._id), action: 'document.create', resource: `documents/${doc._id}`, text: `${who(p)} added the document ${doc.title}`, tone: 'owner' });
+    const doc = await createDocument({ title: q.title || name.replace(/\.\w+$/, ''), kind: q.kind, status: waits ? 'inbox' : q.status, date: q.date, links: waits ? [] : links, page, from: sourceOf(p) });
+    await audit({ actor: ownerActor(p.key._id), action: 'document.create', resource: `documents/${doc._id}`, text: `${who(p)} added the document ${doc.title}${waits ? '. It’s waiting in your inbox for you to file it.' : ''}`, tone: 'owner' });
     reply.code(201);
-    return documentOut(doc);
+    const out = await documentOut(doc);
+    return waits ? { ...out, message: 'Saved to the owner’s Documents inbox. They file it themselves, since you suggest changes rather than make them.' } : out;
   });
 
   app.get('/api/documents/:id', async (req) => documentOut((await docFor(req, false)).doc));
@@ -126,7 +133,8 @@ export default async function documentRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/documents/:id', async (req) => {
-    const { doc, p } = await docFor(req, true);
+    const { doc, p } = await docFor(req, true, { reviewable: true }); // so the owner-only rule is what an assistant hears
+    noAssistant(p);
     await deleteDocument(doc);
     await audit({ actor: ownerActor(p.key._id), action: 'document.delete', resource: `documents/${doc._id}`, text: `${who(p)} deleted the document ${doc.title}`, tone: 'owner' });
     return { deleted: true };
@@ -142,7 +150,8 @@ export default async function documentRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/documents/:id/pages/:fileId', async (req) => {
-    const { doc } = await docFor(req, true);
+    const { doc, p } = await docFor(req, true, { reviewable: true }); // so the owner-only rule is what an assistant hears
+    noAssistant(p);
     return documentOut(await removePage(doc, (req.params as { fileId: string }).fileId));
   });
 
@@ -158,7 +167,8 @@ export default async function documentRoutes(app: FastifyInstance) {
 
   // ── suggestions: an assistant proposes, the owner decides ─────────────
   app.post('/api/documents/:id/suggestions', async (req, reply) => {
-    const { doc, p } = await docFor(req, true);
+    // A suggestion changes nothing until the owner accepts it, so it's open to an assistant that suggests.
+    const { doc, p } = await docFor(req, true, { reviewable: true });
     const s = await checkSuggestion((req.body || {}) as Record<string, unknown>, sourceOf(p));
     const d = (await getDomain(s.domain))!;
     // Fail now, not when the owner clicks Accept.

@@ -367,6 +367,52 @@ async function main() {
     const ownerChange = (await a.call('GET', `/api/data/employment/${clerk.id}/history`)).items.find((v: any) => v.by.type === 'owner');
     await a.call('POST', `/api/data/employment/${clerk.id}/history/${ownerChange.version}/undo`, undefined, [400]);
     await a.call('DELETE', `/api/data/employment/${clerk.id}`);
+    // Every scope respects the mode, not just records; only the owner manages keys; core identity always waits
+    const wide = ['records:read', 'records:write', 'documents:read', 'documents:write', 'owner:read', 'owner:write', 'contacts:read', 'contacts:write'];
+    await a.call('POST', '/api/keys', { name: 'Muse (admin)', scopes: ['keys:manage'], assistant: { mode: 'make', secretFields: [] } }, [400]);
+    ok(true, 'an assistant key can never be given keys:manage');
+    const wideKey = async (mode: string) => (await a.call('POST', '/api/keys', { name: `Muse (${mode}, wide)`, scopes: wide, assistant: { mode, secretFields: [] } })).secret as string;
+    const rest = (secret: string) => async (method: string, path: string, body?: unknown, type = 'application/json') => {
+      const res = await fetch(a.base + path, { method, headers: { authorization: `Bearer ${secret}`, ...(body !== undefined ? { 'content-type': type } : {}) }, body: body === undefined ? undefined : Buffer.isBuffer(body) ? body : JSON.stringify(body) });
+      const text = await res.text();
+      return { status: res.status, body: text ? JSON.parse(text) : null };
+    };
+    const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+    const readOnly = rest(await wideKey('answer'));
+    const readerWrites = [
+      await readOnly('POST', '/api/documents?name=r.png', pixel, 'image/png'),
+      await readOnly('PUT', '/api/owner/fields/preferred_name', { value: 'Mo' }),
+      await readOnly('POST', '/api/contacts', { displayName: 'Someone' }),
+    ];
+    ok(readerWrites.every((r) => r.status === 403 && r.body.code === 'read_only'), 'an answer-only assistant changes nothing anywhere: documents, profile or contacts');
+    const suggester2 = rest(await wideKey('suggest'));
+    const sDoc = await suggester2('POST', '/api/documents?name=s.png&link=employment:none', pixel, 'image/png');
+    ok(sDoc.status === 201 && sDoc.body.status === 'inbox' && !sDoc.body.links.length && sDoc.body.message, 'in suggest mode an uploaded document waits unfiled in the inbox, and the assistant is told');
+    const sBlocked = [
+      await suggester2('PATCH', `/api/documents/${sDoc.body.id}`, { title: 'Renamed' }),
+      await suggester2('PUT', '/api/owner/fields/preferred_name', { value: 'Mo' }),
+      await suggester2('POST', '/api/contacts', { displayName: 'Someone' }),
+    ];
+    ok(sBlocked.every((r) => r.status === 403 && r.body.code === 'needs_review'), "in suggest mode, changes that can't wait in Review yet are refused with a clear reason");
+    ok((await suggester2('DELETE', `/api/documents/${sDoc.body.id}`)).body.code === 'owner_only', 'an assistant can never delete a document');
+    ok((await suggester2('GET', '/api/keys')).status === 403, "an assistant can't see or manage keys");
+    const manager = await a.call('POST', '/api/keys', { name: 'Key manager', scopes: ['keys:manage'] });
+    await a.call('PATCH', `/api/keys/${manager.id}`, { assistant: { mode: 'make', secretFields: [] } }, [400]);
+    ok(true, "a key that manages keys can't be turned into an assistant");
+    const maker2 = rest(await wideKey('make'));
+    const pending = async (r: { status: number; body: any }) => r.status === 202 && r.body.status === 'pending_review' && r.body.message.includes('core identity');
+    ok(await pending(await maker2('POST', '/api/data/names', { data: { kind: 'legal', full: 'Alex Q. Sample' } })), 'in make mode a legal name still waits for the owner');
+    ok((await maker2('POST', '/api/data/names', { data: { kind: 'nickname', full: 'Lex' } })).status === 201, 'a nickname follows the mode');
+    ok(await pending(await maker2('POST', '/api/data/contact_methods', { data: { kind: 'email', value: 'alex@example.com' } })), 'a new email or phone always waits for the owner');
+    ok(await pending(await maker2('POST', '/api/data/residences', { data: { street1: '1 New St', city: 'Boise', country: 'US' }, validFrom: '2026-01' })), 'a new current address always waits for the owner');
+    ok((await maker2('POST', '/api/data/residences', { data: { street1: '9 Old Rd', city: 'Boise', country: 'US' }, validFrom: '2001-01', validTo: '2003-01' })).status === 201, 'a past address follows the mode');
+    const homeNow = (await a.call('GET', '/api/data/residences?current=true')).items[0];
+    ok(await pending(await maker2('PATCH', `/api/data/residences/${homeNow.id}`, { validTo: '2026-02' })), 'ending the current address waits for the owner');
+    ok((await maker2('PUT', '/api/owner/fields/legal_name', { value: 'Someone Else' })).body.code === 'needs_owner', "an assistant can't change a core identity detail on the profile");
+    ok((await maker2('PUT', '/api/owner/fields/preferred_name', { value: 'Mo', sensitivity: 'secret' })).body.code === 'needs_owner', "an assistant can't change how a profile detail is protected");
+    ok((await maker2('PUT', '/api/owner/fields/preferred_name', { value: 'Mo' })).status === 200, 'an everyday profile detail follows the mode');
+    ok((await maker2('PATCH', '/api/owner', { displayName: 'Someone Else' })).body.code === 'owner_only', 'only the owner changes the account name and email');
+    for (const r of (await a.call('GET', '/api/reviews')).items) await a.call('POST', `/api/reviews/${r.id}/reject`);
     // OAuth: an assistant platform connects without anyone copying a key
     const prm = await (await fetch(`${a.base}/.well-known/oauth-protected-resource`)).json();
     const noToken = await fetch(`${a.base}/api/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' });

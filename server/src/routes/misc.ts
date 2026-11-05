@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ctx } from '../ctx.js';
 import { audit, ownerActor } from '../audit.js';
-import { bad, bearer, checkAssistant, COOKIE, findKey, HttpError, issueKey, notFound, requireOwner, requireSession, SCOPES, type ApiKeyDoc, type AssistantMode } from '../auth.js';
+import { bad, bearer, checkAssistant, checkAssistantScopes, COOKIE, findKey, HttpError, issueKey, notFound, requireOwner, requireSession, SCOPES, type ApiKeyDoc, type AssistantMode } from '../auth.js';
 
 const MODE_TEXT: Record<AssistantMode, string> = { answer: 'answer questions only', suggest: 'suggest changes', make: 'make changes' };
 import { allFields, plainValue } from '../fields.js';
@@ -119,6 +119,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     if (!scopes.length) throw bad('scopes_required', 'Pick at least one scope');
     const name = String(b.name || '').trim() || 'New key';
     const assistant = checkAssistant(b.assistant);
+    if (assistant) checkAssistantScopes(scopes);
     const { secret, doc } = await issueKey({ kind: 'app', name, scopes, assistant });
     await audit({ actor: ownerActor(p.key._id), action: 'key.create', resource: `apiKeys/${doc._id}`, text: assistant ? `You connected the assistant “${name}” (${MODE_TEXT[assistant.mode]})` : `You created the API key “${name}”`, tone: 'owner' });
     reply.code(201);
@@ -132,6 +133,7 @@ export default async function miscRoutes(app: FastifyInstance) {
     if (!k || k.revokedAt || k.kind !== 'app') throw notFound('key_not_found');
     const assistant = checkAssistant((req.body as { assistant?: unknown } | null)?.assistant);
     if (!assistant) throw bad('assistant_required', 'Send { assistant: { mode, secretFields } }');
+    checkAssistantScopes(k.scopes);
     await ctx.store.update('apiKeys', k._id, { assistant });
     await audit({ actor: ownerActor(p.key._id), action: 'key.assistant', resource: `apiKeys/${k._id}`, text: `You set ${k.name} to ${MODE_TEXT[assistant.mode]}${assistant.secretFields.length ? `, with ${assistant.secretFields.length} secret ${assistant.secretFields.length === 1 ? 'field' : 'fields'}` : ''}`, tone: 'owner' });
     return { id: k._id, name: k.name, assistant };

@@ -14,8 +14,8 @@ type Info = { client: { name: string; uri: string | null; verified: boolean; red
 
 const MODES: [Mode, string, string][] = [
   ['answer', 'Answer questions', 'It reads what you allow and changes nothing.'],
-  ['suggest', 'Suggest changes', 'Its changes wait in Review until you approve them.'],
-  ['make', 'Make changes', 'Its changes are saved straight away. You can see and undo them.'],
+  ['suggest', 'Suggest changes', 'Its changes wait in Review until you approve them. Documents it adds wait in your inbox for you to file.'],
+  ['make', 'Make changes', 'Its changes are saved straight away. You can see and undo them. Changes to your identity, current address, email and phone still wait for you.'],
 ];
 const LENGTHS: [Length, string][] = [['hour', 'Just for now (1 hour)'], ['day', 'For a day'], ['60d', '60 days'], ['forever', 'Until I disconnect']];
 

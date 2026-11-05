@@ -8,6 +8,14 @@ import { getOwner } from '../owner.js';
 import { nudgePeers } from '../contacts.js';
 import { grantsFor, type LinkDoc, type PublicProfileDoc } from '../federation.js';
 
+/**
+ * Profile details that are core identity: what forms, sharing and identity verification check against. Changes to
+ * them always wait for the owner. Review doesn't hold profile details yet, so an assistant is refused and told why.
+ */
+const IDENTITY_FIELDS = new Set(['legal_name', 'dob', 'country_birth', 'citizenship', 'email', 'phone', 'address', 'country_res', 'city']);
+const isIdentityField = (f: FieldDoc) => IDENTITY_FIELDS.has(f.key) || f.section === 'gov' || f.sensitivity === 'secret';
+const needsOwner = () => new HttpError(403, 'needs_owner', 'This is core identity or a secret detail, so only the owner changes it. Tell your owner the change you’d make.');
+
 /** For each field: how many connected contacts can read it right now. */
 async function sharingCounts(fields: FieldDoc[]) {
   const links = await ctx.store.find<LinkDoc>('nodeLinks', { status: 'active' });
@@ -31,6 +39,7 @@ export default async function ownerRoutes(app: FastifyInstance) {
 
   app.patch('/api/owner', async (req) => {
     const p = await requireOwner(req, 'owner:write');
+    if (p.key.assistant) throw new HttpError(403, 'owner_only', 'Only the owner changes the name and email on their account.');
     const o = (await getOwner())!;
     const body = (req.body || {}) as { displayName?: string; email?: string; prefs?: { showTechnical?: boolean } };
     const patch: Record<string, unknown> = {};
@@ -67,6 +76,7 @@ export default async function ownerRoutes(app: FastifyInstance) {
     if (!label) throw bad('label_required', 'Give the field a name');
     const sensitivity = SENSITIVITIES.includes(body.sensitivity as Sensitivity) ? (body.sensitivity as Sensitivity) : 'sensitive';
     const section = SECTIONS.includes(body.section as never) ? (body.section as FieldDoc['section']) : 'custom';
+    if (p.key.assistant && (section !== 'custom' || sensitivity === 'secret')) throw needsOwner();
     let key = slugKey(label);
     for (let i = 2; await ctx.store.findOne('fields', { key }); i++) key = `${slugKey(label)}_${i}`;
     const order = (await ctx.store.count('fields')) + 1;
@@ -84,6 +94,8 @@ export default async function ownerRoutes(app: FastifyInstance) {
     const f = await ctx.store.findOne<FieldDoc>('fields', { key });
     if (!f) throw notFound('field_not_found');
     const body = (req.body || {}) as { value?: string; sensitivity?: Sensitivity; label?: string };
+    // An assistant may fill in everyday details. Core identity, secrets, and how a field is labelled or protected stay with the owner.
+    if (p.key.assistant && (isIdentityField(f) || (body.sensitivity !== undefined && body.sensitivity !== f.sensitivity) || (body.label !== undefined && body.label.trim() !== f.label))) throw needsOwner();
     if (f.derivedFrom && body.value !== undefined && body.value !== plainValue(f)) {
       throw new HttpError(409, 'derived_field', `${f.label} comes from ${f.derivedFrom === 'residences' ? 'Residences' : 'Contact methods'}. Change it there.`);
     }
